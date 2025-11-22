@@ -2,6 +2,7 @@ import streamlit as st
 import os
 from typing import List, Optional
 from wazuh_parser import parse_wazuh_xml, RuleData, rule_to_dict, summarize_filter_logic
+from visualizations.flowchart import create_sankey_diagram, create_node_link_diagram
 
 st.set_page_config(
     page_title="Wazuh Rule Visualizer",
@@ -96,7 +97,7 @@ def render_file_upload():
     """Render the file upload section and return XML content."""
     st.subheader("📁 Load Wazuh Rules")
     
-    col1, col2 = st.columns([3, 1])
+    col1, col2, col3 = st.columns([2, 1, 1])
     
     with col1:
         uploaded_file = st.file_uploader(
@@ -108,7 +109,12 @@ def render_file_upload():
     with col2:
         st.write("")
         st.write("")
-        load_sample = st.button("📋 Load Sample Rules", use_container_width=True)
+        load_sample = st.button("📋 Sample", use_container_width=True, help="Load bundled sample rules")
+    
+    with col3:
+        st.write("")
+        st.write("")
+        show_paste = st.button("📝 Paste", use_container_width=True, help="Paste XML rules directly")
     
     xml_content = None
     source_identifier = None
@@ -124,6 +130,32 @@ def render_file_upload():
             st.info("✅ Loaded bundled sample rules")
         else:
             st.error("❌ Sample file not found. Please upload an XML file.")
+    elif show_paste:
+        st.session_state.show_paste_input = True
+    
+    if st.session_state.get("show_paste_input", False):
+        st.markdown("**Paste Wazuh XML Rules:**")
+        pasted_xml = st.text_area(
+            "XML Content",
+            placeholder="Paste your Wazuh rules XML here (e.g., <rules><rule id=\"1\" level=\"3\">...</rule></rules>)",
+            height=200,
+            label_visibility="collapsed"
+        )
+        
+        col_submit, col_cancel = st.columns([1, 1])
+        with col_submit:
+            if st.button("✅ Parse Pasted Rules", use_container_width=True):
+                if pasted_xml.strip():
+                    xml_content = pasted_xml
+                    source_identifier = f"pasted_{hash(pasted_xml) % 10000000}"
+                    st.success(f"✅ Loaded pasted XML ({len(xml_content)} bytes)")
+                    st.session_state.show_paste_input = False
+                else:
+                    st.error("❌ Please paste some XML content")
+        
+        with col_cancel:
+            if st.button("❌ Cancel", use_container_width=True):
+                st.session_state.show_paste_input = False
     
     return xml_content, source_identifier
 
@@ -188,6 +220,63 @@ def render_metadata_summary(rules: List[RuleData], warnings: List[str]):
             st.markdown(f"• {group}: **{group_count}**")
         if len(all_groups) > 10:
             st.markdown(f"_...and {len(all_groups) - 10} more_")
+
+
+def render_flowchart_visualization(rules: List[RuleData]):
+    """Render interactive flowchart visualizations."""
+    if not rules:
+        return
+    
+    st.subheader("📊 Rule Flow Visualization")
+    
+    col1, col2, col3 = st.columns([2, 1, 1])
+    
+    with col1:
+        viz_type = st.selectbox(
+            "Visualization Type",
+            options=["Sankey Diagram", "Node-Link Network"],
+            help="Choose how to visualize rule flows"
+        )
+    
+    with col2:
+        min_severity = st.select_slider(
+            "Min Severity",
+            options=list(range(0, 16)),
+            value=0,
+            help="Filter rules by minimum severity level"
+        )
+    
+    with col3:
+        if viz_type == "Sankey Diagram":
+            layout_density = st.selectbox(
+                "Layout",
+                options=["compact", "normal", "sparse"],
+                help="Adjust diagram density"
+            )
+        else:
+            layout_type = st.selectbox(
+                "Layout",
+                options=["hierarchical", "circular", "radial"],
+                help="Choose network layout type"
+            )
+    
+    try:
+        if viz_type == "Sankey Diagram":
+            fig = create_sankey_diagram(
+                rules,
+                min_level=min_severity,
+                layout_density=layout_density
+            )
+        else:
+            fig = create_node_link_diagram(
+                rules,
+                min_level=min_severity,
+                layout_type=layout_type
+            )
+        
+        st.plotly_chart(fig, use_container_width=True, config={"responsive": True})
+    except Exception as e:
+        st.error(f"❌ Error rendering visualization: {str(e)}")
 
 
 def render_rule_details(rules: List[RuleData]):
@@ -288,6 +377,8 @@ def main():
         st.session_state.warnings = None
     if "xml_content" not in st.session_state:
         st.session_state.xml_content = None
+    if "show_paste_input" not in st.session_state:
+        st.session_state.show_paste_input = False
     
     render_instructions()
     
@@ -314,29 +405,34 @@ def main():
         
         st.divider()
         
+        render_flowchart_visualization(st.session_state.rules)
+        
+        st.divider()
+        
         render_rule_details(st.session_state.rules)
     else:
-        st.info("👆 Upload a Wazuh XML file or load the sample to get started")
+        st.info("👆 Upload a Wazuh XML file, load the sample, or paste rules to get started")
     
     with st.sidebar:
         st.header("ℹ️ About")
         st.markdown("""
         **Wazuh Rule Visualizer**
         
-        Version: 1.0.0
+        Version: 1.1.0
         
         This tool parses and visualizes Wazuh XML security rules, helping analysts understand 
         detection logic, severity levels, and compliance mappings.
         
         **Features:**
         - 📁 XML file upload with validation
+        - 📝 Direct XML paste input
         - 📊 Rule statistics and metrics
+        - 📈 Interactive flowchart visualizations (Sankey & Node-Link)
         - 🔍 Search and filter capabilities
         - 🎯 MITRE ATT&CK integration
         - 🔄 Cached parsing for performance
         
         **Coming Soon:**
-        - 📈 Interactive flowcharts
         - 🎮 Rule simulation engine
         - 📤 Export capabilities
         """)
