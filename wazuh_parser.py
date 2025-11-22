@@ -131,7 +131,7 @@ def _parse_rule_element(rule_elem: ET.Element) -> Optional[RuleData]:
     filter_conditions = _parse_filter_conditions(rule_elem)
 
     # Parse reference information (MITRE, CIS, NIST)
-    mitre_techniques = _extract_references(rule_elem, "attack", "technique")
+    mitre_techniques = _extract_mitre_techniques(rule_elem)
     cis_controls = _extract_references(rule_elem, "cis", "control")
     nist_controls = _extract_references(rule_elem, "nist", "control")
 
@@ -290,6 +290,40 @@ def _extract_references(
             if sub_elem is not None and sub_elem.text:
                 references.append(sub_elem.text)
     return references
+
+
+def _extract_mitre_techniques(rule_elem: ET.Element) -> List[str]:
+    """
+    Extract MITRE ATT&CK technique IDs from a rule.
+    Supports both <mitre><id> format and <reference><type>attack</type><technique> format.
+    
+    Args:
+        rule_elem: The rule element to search
+        
+    Returns:
+        List of MITRE technique IDs (e.g., ['T1021', 'T1569'])
+    """
+    techniques = []
+    
+    # Format 1: <mitre><id>T1021</id></mitre>
+    for mitre_elem in rule_elem.findall("mitre"):
+        id_elem = mitre_elem.find("id")
+        if id_elem is not None and id_elem.text:
+            techniques.append(id_elem.text.strip())
+    
+    # Format 2: <reference><type>attack</type><technique>T1110.001</technique></reference>
+    ref_techniques = _extract_references(rule_elem, "attack", "technique")
+    techniques.extend(ref_techniques)
+    
+    # Remove duplicates while preserving order
+    seen = set()
+    unique_techniques = []
+    for tech in techniques:
+        if tech not in seen:
+            seen.add(tech)
+            unique_techniques.append(tech)
+    
+    return unique_techniques
 
 
 def summarize_filter_logic(conditions: List[FilterCondition]) -> str:

@@ -15,6 +15,9 @@
     <if_sid>61605</if_sid>
     <field>sysmon.event_id:1</field>
     <match>.*powershell.*-enc.*|.*cmd.*\/c.*powershell.*</match>
+    <mitre>
+      <id>T1059.001</id>
+    </mitre>
     <group>sysmon_event1</group>
   </rule>
 
@@ -66,6 +69,9 @@
     <if_sid>61605</if_sid>
     <field>sysmon.event_id:3</field>
     <match>.*malicious\.com.*|.*suspicious\.net.*</match>
+    <mitre>
+      <id>T1071</id>
+    </mitre>
     <group>sysmon_event3</group>
   </rule>
 
