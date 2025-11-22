@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ruleset version="1" name="Sample Wazuh Rules">
+  <!-- Basic Web Application Rule -->
+  <rule id="100001" level="3">
+    <description>Web request detected</description>
+    <group>web, access_control</group>
+  </rule>
+
+  <!-- Rule with parent (if_sid) -->
+  <rule id="100002" level="5">
+    <description>Multiple failed web login attempts</description>
+    <if_sid>100001</if_sid>
+    <frequency>5</frequency>
+    <timeframe>300</timeframe>
+    <same_field>src_ip</same_field>
+    <group>web, authentication</group>
+  </rule>
+
+  <!-- Rule with match condition -->
+  <rule id="100003" level="6">
+    <description>SQL injection attempt detected</description>
+    <match>.*union.*select.*|.*drop.*table.*</match>
+    <group>web, injection, application_attack</group>
+  </rule>
+
+  <!-- Rule with field condition -->
+  <rule id="100004" level="4">
+    <description>Suspicious user agent detected</description>
+    <field>user_agent</field>
+    <group>web, reconnaissance</group>
+  </rule>
+
+  <!-- Rule with MITRE ATT&CK references -->
+  <rule id="100005" level="7">
+    <description>Credential access detected via web form</description>
+    <frequency>3</frequency>
+    <timeframe>60</timeframe>
+    <reference>
+      <type>attack</type>
+      <technique>T1110.001</technique>
+    </reference>
+    <reference>
+      <type>attack</type>
+      <technique>T1556</technique>
+    </reference>
+    <group>web, credential_access</group>
+  </rule>
+
+  <!-- Rule with no_alert flag -->
+  <rule id="100006" level="0">
+    <description>Baseline HTTP traffic - no alert</description>
+    <no_alert/>
+    <group>web, baseline</group>
+  </rule>
+
+  <!-- Complex rule with multiple conditions -->
+  <rule id="100007" level="8">
+    <description>Potential command injection attack</description>
+    <match>.*exec\(.*\)|.*system\(.*\)|.*passthru\(.*\)</match>
+    <frequency>2</frequency>
+    <timeframe>120</timeframe>
+    <group>web, injection, codebase_attack</group>
+  </rule>
+
+  <!-- Rule demonstrating severity levels -->
+  <rule id="100008" level="12">
+    <description>Critical security vulnerability exploitation</description>
+    <if_sid>100003</if_sid>
+    <group>critical, incident_response</group>
+  </rule>
+
+  <!-- Rule with decoder pattern -->
+  <rule id="100009" level="4">
+    <description>Apache access log analysis rule</description>
+    <decoder>
+      <program_name>httpd</program_name>
+    </decoder>
+    <group>web, apache</group>
+  </rule>
+
+  <!-- Rule with multiple filter conditions -->
+  <rule id="100010" level="5">
+    <description>Brute force detection rule</description>
+    <frequency>10</frequency>
+    <timeframe>300</timeframe>
+    <same_field>dest_ip</same_field>
+    <ignore>white_list_admin</ignore>
+    <group>web, authentication, brute_force</group>
+  </rule>
+</ruleset>
