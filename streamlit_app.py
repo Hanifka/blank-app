@@ -1,7 +1,7 @@
 import streamlit as st
 import os
 from typing import List, Optional
-from wazuh_parser import parse_wazuh_xml, RuleData, rule_to_dict, summarize_filter_logic
+from wazuh_parser import parse_wazuh_xml, RuleData, rule_to_dict, summarize_filter_logic, extract_relationships
 from visualizations.flowchart import create_sankey_diagram, create_node_link_diagram
 
 st.set_page_config(
@@ -17,6 +17,15 @@ def load_sample_xml() -> str:
     sample_path = os.path.join(os.path.dirname(__file__), "sample_wazuh_rules.xml")
     if os.path.exists(sample_path):
         with open(sample_path, "r", encoding="utf-8") as f:
+            return f.read()
+    return ""
+
+
+def load_sysmon_sample() -> str:
+    """Load the Sysmon sample XML file for testing relationships."""
+    sysmon_path = os.path.join(os.path.dirname(__file__), "sysmon_sample.xml")
+    if os.path.exists(sysmon_path):
+        with open(sysmon_path, "r", encoding="utf-8") as f:
             return f.read()
     return ""
 
@@ -114,6 +123,11 @@ def render_file_upload():
     with col3:
         st.write("")
         st.write("")
+        load_sysmon = st.button("🖥️ Sysmon", use_container_width=True, help="Load Sysmon relationship sample")
+    
+    with col4:
+        st.write("")
+        st.write("")
         show_paste = st.button("📝 Paste", use_container_width=True, help="Paste XML rules directly")
     
     xml_content = None
@@ -130,6 +144,13 @@ def render_file_upload():
             st.info("✅ Loaded bundled sample rules")
         else:
             st.error("❌ Sample file not found. Please upload an XML file.")
+    elif load_sysmon:
+        xml_content = load_sysmon_sample()
+        if xml_content:
+            source_identifier = "sysmon_sample"
+            st.info("✅ Loaded Sysmon relationship sample")
+        else:
+            st.error("❌ Sysmon sample file not found. Please upload an XML file.")
     elif show_paste:
         st.session_state.show_paste_input = True
     
@@ -222,6 +243,102 @@ def render_metadata_summary(rules: List[RuleData], warnings: List[str]):
             st.markdown(f"_...and {len(all_groups) - 10} more_")
 
 
+def render_relationship_debug_section(rules: List[RuleData], xml_content: str):
+    """Render relationship debugging section with logs and XML display."""
+    st.subheader("🔍 Relationships Debug Log")
+    
+    # Extract relationships for debugging
+    relationships = extract_relationships(rules)
+    
+    if relationships:
+        st.markdown("**Extracted Relationships (copyable format):**")
+        
+        # Create a copyable text area with all relationships
+        debug_lines = []
+        for rel in relationships:
+            if rel["relationship_type"] == "if_sid":
+                debug_lines.append(f"Rule {rel['source_rule_id']} --if_sid--> {rel['target_rule_id']}")
+            elif rel["relationship_type"] == "if_matched_group":
+                debug_lines.append(f"Rule {rel['source_rule_id']} --if_matched_group--> {rel['target_group']}")
+            elif rel["relationship_type"] == "if_group":
+                debug_lines.append(f"Rule {rel['source_rule_id']} --if_group--> {rel['target_group']}")
+        
+        debug_text = "\n".join(debug_lines)
+        st.text_area("Debug Log", value=debug_text, height=150, help="Copy this output to verify parser accuracy")
+        
+        # Show relationship counts by type
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            if_sid_count = sum(1 for r in relationships if r["relationship_type"] == "if_sid")
+            st.metric("if_sid relationships", if_sid_count)
+        with col2:
+            if_matched_count = sum(1 for r in relationships if r["relationship_type"] == "if_matched_group")
+            st.metric("if_matched_group relationships", if_matched_count)
+        with col3:
+            if_group_count = sum(1 for r in relationships if r["relationship_type"] == "if_group")
+            st.metric("if_group relationships", if_group_count)
+    else:
+        st.info("No relationships found in the parsed rules.")
+    
+    # Color-coded rule display
+    st.markdown("**Rule Classification:**")
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.markdown('<span style="color:blue">🔵</span> **Parent rules** (referenced by if_sid)', unsafe_allow_html=True)
+    with col2:
+        st.markdown('<span style="color:green">🟢</span> **if_matched_group rules**', unsafe_allow_html=True)
+    with col3:
+        st.markdown('<span style="color:orange">🟠</span> **if_group rules**', unsafe_allow_html=True)
+    with col4:
+        st.markdown('<span style="color:gold">🟡</span> **Child/dependent rules**', unsafe_allow_html=True)
+    
+    # Show rules with color coding
+    st.markdown("**Parsed Rules with Color Coding:**")
+    
+    # Create rule list with color coding
+    for rule in rules:
+        rule_color = "black"  # default
+        
+        # Determine rule type and color
+        is_parent = any(r["target_rule_id"] == rule.rule_id and r["relationship_type"] == "if_sid" for r in relationships)
+        has_if_matched_group = bool(rule.detection_cues.if_matched_groups)
+        has_if_group = bool(rule.detection_cues.if_groups)
+        has_if_sid = bool(rule.detection_cues.if_sid)
+        
+        if is_parent:
+            rule_color = "blue"
+            rule_type = "🔵 Parent"
+        elif has_if_matched_group:
+            rule_color = "green"
+            rule_type = "🟢 if_matched_group"
+        elif has_if_group:
+            rule_color = "orange"
+            rule_type = "🟠 if_group"
+        elif has_if_sid:
+            rule_color = "gold"
+            rule_type = "🟡 Child"
+        else:
+            rule_type = "⚪ Standalone"
+        
+        # Display rule with color
+        rule_info = f"{rule_type} - Rule {rule.rule_id} (Level {rule.level}): {rule.description[:80]}{'...' if len(rule.description) > 80 else ''}"
+        
+        # Show relationship info if available
+        if has_if_sid:
+            rule_info += f" → Parent: {rule.detection_cues.if_sid}"
+        if rule.detection_cues.if_matched_groups:
+            rule_info += f" → Groups: {', '.join(rule.detection_cues.if_matched_groups)}"
+        if rule.detection_cues.if_groups:
+            rule_info += f" → Groups: {', '.join(rule.detection_cues.if_groups)}"
+        
+        st.markdown(f'<span style="color:{rule_color}">{rule_info}</span>', unsafe_allow_html=True)
+    
+    # Raw XML display with syntax highlighting
+    with st.expander("📄 View Raw XML"):
+        st.code(xml_content, language="xml", line_numbers=True)
+
+
 def render_flowchart_visualization(rules: List[RuleData]):
     """Render interactive flowchart visualizations."""
     if not rules:
@@ -256,9 +373,13 @@ def render_flowchart_visualization(rules: List[RuleData]):
         else:
             connection_type = st.selectbox(
                 "Connection Type",
-                options=["if_sid", "if_matched_group"],
-                format_func=lambda x: "Parent Chain (if_sid)" if x == "if_sid" else "Group Correlation (if_matched_group)",
-                help="Choose whether to visualize parent-child rule chains or matched group correlations"
+                options=["if_sid", "if_matched_group", "if_group"],
+                format_func=lambda x: {
+                    "if_sid": "Parent Chain (if_sid)",
+                    "if_matched_group": "Group Correlation (if_matched_group)",
+                    "if_group": "Group Correlation (if_group)"
+                }[x],
+                help="Choose which relationship type to visualize"
             )
     
     if viz_type == "Interactive Network":
@@ -422,6 +543,10 @@ def main():
     
     if st.session_state.rules is not None:
         render_metadata_summary(st.session_state.rules, st.session_state.warnings or [])
+        
+        st.divider()
+        
+        render_relationship_debug_section(st.session_state.rules, st.session_state.xml_content)
         
         st.divider()
         

@@ -124,7 +124,19 @@ def create_node_link_diagram(
     connection_type: str = "if_sid",
     selected_groups: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
-    """Create an interactive node-link network artifact."""
+    """
+    Create an interactive node-link network artifact.
+    
+    Args:
+        rules: List of RuleData objects to visualize
+        min_level: Minimum severity level to include
+        layout_type: Layout type for the network
+        connection_type: Relationship type to visualize ("if_sid", "if_matched_group", or "if_group")
+        selected_groups: Optional list of groups to filter by
+        
+    Returns:
+        Dictionary with network HTML, height, and metadata
+    """
     filtered_rules = _filter_rules_by_severity_and_groups(
         rules,
         min_level=min_level,
@@ -511,11 +523,11 @@ def build_edges_by_connection_type(
     connection_type: str = "if_sid",
 ) -> List[Tuple[str, str, Dict[str, Any]]]:
     """
-    Construct edges between rules based on connection type.
+    Construct edges between rules based on explicit relationship types.
     
     Args:
         rules: List of RuleData objects
-        connection_type: Either "if_sid" or "if_matched_group"
+        connection_type: Either "if_sid", "if_matched_group", or "if_group"
     
     Returns:
         List of (source_id, target_id, edge_metadata) tuples
@@ -526,6 +538,7 @@ def build_edges_by_connection_type(
     rule_lookup = {rule.rule_id: rule for rule in rules}
     
     if connection_type == "if_sid":
+        # Create parent->child edges for if_sid relationships
         for rule in rules:
             if rule.detection_cues.if_sid:
                 parent_id = rule.detection_cues.if_sid
@@ -535,12 +548,13 @@ def build_edges_by_connection_type(
                         str(rule.rule_id),
                         {
                             "type": "if_sid",
-                            "label": "parent→child",
-                            "title": f"Rule {parent_id} triggers Rule {rule.rule_id}",
+                            "label": "if_sid",
+                            "title": f"Rule {parent_id} → Rule {rule.rule_id} (parent→child)",
                         }
                     ))
     
     elif connection_type == "if_matched_group":
+        # Create edges from rules in matched groups to the rule that references them
         group_to_rules = defaultdict(list)
         for rule in rules:
             for group in rule.groups:
@@ -557,8 +571,31 @@ def build_edges_by_connection_type(
                                     str(rule.rule_id),
                                     {
                                         "type": "if_matched_group",
-                                        "label": f"group:{matched_group}",
-                                        "title": f"Group '{matched_group}' match: {source_rule_id}→{rule.rule_id}",
+                                        "label": f"if_matched_group:{matched_group}",
+                                        "title": f"Group '{matched_group}': Rule {source_rule_id} → Rule {rule.rule_id}",
+                                    }
+                                ))
+    
+    elif connection_type == "if_group":
+        # Create edges for if_group relationships (similar to if_matched_group but different semantics)
+        group_to_rules = defaultdict(list)
+        for rule in rules:
+            for group in rule.groups:
+                group_to_rules[group].append(rule.rule_id)
+        
+        for rule in rules:
+            if rule.detection_cues.if_groups:
+                for group_name in rule.detection_cues.if_groups:
+                    if group_name in group_to_rules:
+                        for source_rule_id in group_to_rules[group_name]:
+                            if source_rule_id != rule.rule_id:
+                                edges.append((
+                                    str(source_rule_id),
+                                    str(rule.rule_id),
+                                    {
+                                        "type": "if_group",
+                                        "label": f"if_group:{group_name}",
+                                        "title": f"Group correlation '{group_name}': Rule {source_rule_id} → Rule {rule.rule_id}",
                                     }
                                 ))
     
@@ -822,6 +859,8 @@ def _format_connection_empty_message(connection_type: str) -> str:
     """Format empty message based on connection type."""
     if connection_type == "if_matched_group":
         return "No rules with if_matched_group connections found"
+    elif connection_type == "if_group":
+        return "No rules with if_group connections found"
     return "No rules with if_sid parent relationships found"
 
 

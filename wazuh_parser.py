@@ -19,6 +19,7 @@ class DetectionCues:
     decoded_as: Optional[str] = None
     if_sid: Optional[int] = None
     if_matched_groups: List[str] = field(default_factory=list)
+    if_groups: List[str] = field(default_factory=list)
     description: Optional[str] = None
 
 
@@ -158,6 +159,7 @@ def _parse_detection_cues(rule_elem: ET.Element) -> DetectionCues:
     decoded_as = None
     if_sid = None
     if_matched_groups = []
+    if_groups = []
     description = None
 
     # Look for decoded_as in decoder/program_name pattern
@@ -178,17 +180,34 @@ def _parse_detection_cues(rule_elem: ET.Element) -> DetectionCues:
     # Look for if_matched_group (parent rule groups)
     for if_matched_group_elem in rule_elem.findall("if_matched_group"):
         if if_matched_group_elem is not None and if_matched_group_elem.text:
-            if_matched_groups.append(if_matched_group_elem.text.strip())
+            group_name = if_matched_group_elem.text.strip()
+            if_matched_groups.append(group_name)
+
+    # Look for if_group (different from if_matched_group)
+    for if_group_elem in rule_elem.findall("if_group"):
+        if if_group_elem is not None and if_group_elem.text:
+            group_name = if_group_elem.text.strip()
+            if_groups.append(group_name)
 
     # Description for detection cues
     description_elem = rule_elem.find("description")
     if description_elem is not None and description_elem.text:
         description = description_elem.text
 
+    # Debug logging for extracted relationships
+    rule_id = rule_elem.get("id", "unknown")
+    if if_sid:
+        logger.info(f"Rule {rule_id} --if_sid--> {if_sid}")
+    for group in if_matched_groups:
+        logger.info(f"Rule {rule_id} --if_matched_group--> {group}")
+    for group in if_groups:
+        logger.info(f"Rule {rule_id} --if_group--> {group}")
+
     return DetectionCues(
         decoded_as=decoded_as,
         if_sid=if_sid,
         if_matched_groups=if_matched_groups,
+        if_groups=if_groups,
         description=description,
     )
 
@@ -304,6 +323,49 @@ def summarize_filter_logic(conditions: List[FilterCondition]) -> str:
             summaries.append(f"Ignore: {cond.ignore}")
 
     return " | ".join(summaries) if summaries else "No filter conditions"
+
+
+def extract_relationships(rules: List[RuleData]) -> List[Dict[str, Any]]:
+    """
+    Extract all relationships from parsed rules for debugging and visualization.
+    
+    Args:
+        rules: List of RuleData objects
+        
+    Returns:
+        List of relationship dictionaries with source, target, and type
+    """
+    relationships = []
+    
+    for rule in rules:
+        # if_sid relationships
+        if rule.detection_cues.if_sid:
+            relationships.append({
+                "source_rule_id": rule.rule_id,
+                "target_rule_id": rule.detection_cues.if_sid,
+                "relationship_type": "if_sid",
+                "description": f"Rule {rule.rule_id} references parent rule {rule.detection_cues.if_sid}"
+            })
+        
+        # if_matched_group relationships
+        for group in rule.detection_cues.if_matched_groups:
+            relationships.append({
+                "source_rule_id": rule.rule_id,
+                "target_group": group,
+                "relationship_type": "if_matched_group",
+                "description": f"Rule {rule.rule_id} triggers on group {group}"
+            })
+        
+        # if_group relationships
+        for group in rule.detection_cues.if_groups:
+            relationships.append({
+                "source_rule_id": rule.rule_id,
+                "target_group": group,
+                "relationship_type": "if_group",
+                "description": f"Rule {rule.rule_id} correlates with group {group}"
+            })
+    
+    return relationships
 
 
 def rule_to_dict(rule: RuleData) -> Dict[str, Any]:

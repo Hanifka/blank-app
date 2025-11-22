@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ruleset version="1" name="Sysmon Rules">
+  <!-- Base Sysmon rule -->
+  <rule id="61605" level="3">
+    <description>Sysmon base rule</description>
+    <decoder>
+      <program_name>sysmon</program_name>
+    </decoder>
+    <group>sysmon</group>
+  </rule>
+
+  <!-- Rules with if_sid relationships (should only connect to 61605) -->
+  <rule id="102101" level="7">
+    <description>Sysmon process creation - suspicious command line</description>
+    <if_sid>61605</if_sid>
+    <field>sysmon.event_id:1</field>
+    <match>.*powershell.*-enc.*|.*cmd.*\/c.*powershell.*</match>
+    <group>sysmon_event1</group>
+  </rule>
+
+  <rule id="102102" level="8">
+    <description>Sysmon process creation - suspicious parent process</description>
+    <if_sid>61605</if_sid>
+    <field>sysmon.event_id:1</field>
+    <field>sysmon.parent_image:.*\\word\.exe$</field>
+    <group>sysmon_event1</group>
+  </rule>
+
+  <rule id="102103" level="6">
+    <description>Sysmon file creation - suspicious extension</description>
+    <if_sid>61605</if_sid>
+    <field>sysmon.event_id:11</field>
+    <match>.*\.scr$|.*\.vbs$|.*\.js$</match>
+    <group>sysmon_event11</group>
+  </rule>
+
+  <!-- Rule with if_matched_group relationship -->
+  <rule id="102502" level="10">
+    <description>Correlation - Multiple suspicious process creation events</description>
+    <if_matched_group>sysmon_event3</if_matched_group>
+    <frequency>3</frequency>
+    <timeframe>300</timeframe>
+    <group>correlation</group>
+  </rule>
+
+  <!-- Rule with if_group relationship -->
+  <rule id="102503" level="9">
+    <description>Group correlation - Sysmon network connections</description>
+    <if_group>sysmon_event3</if_group>
+    <frequency>5</frequency>
+    <timeframe>600</timeframe>
+    <group>correlation</group>
+  </rule>
+
+  <!-- Additional rules with sysmon_event3 group for testing -->
+  <rule id="102201" level="5">
+    <description>Sysmon network connection - outbound</description>
+    <if_sid>61605</if_sid>
+    <field>sysmon.event_id:3</field>
+    <field>sysmon.direction:outbound</field>
+    <group>sysmon_event3</group>
+  </rule>
+
+  <rule id="102202" level="6">
+    <description>Sysmon network connection - suspicious destination</description>
+    <if_sid>61605</if_sid>
+    <field>sysmon.event_id:3</field>
+    <match>.*malicious\.com.*|.*suspicious\.net.*</match>
+    <group>sysmon_event3</group>
+  </rule>
+
+  <rule id="102203" level="7">
+    <description>Sysmon network connection - unusual port</description>
+    <if_sid>61605</if_sid>
+    <field>sysmon.event_id:3</field>
+    <field>sysmon.destination_port:4444|5555|6666</field>
+    <group>sysmon_event3</group>
+  </rule>
+</ruleset>
