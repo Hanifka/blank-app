@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ruleset version="1" name="MITRE Test Rules">
+  <!-- Rule 102139 mentioned in the ticket with T1021 -->
+  <rule id="102139" level="7">
+    <description>Remote Services - Remote Desktop Protocol</description>
+    <if_sid>61605</if_sid>
+    <field>sysmon.event_id:1</field>
+    <match>.*mstsc\.exe.*|.*rdp.*</match>
+    <mitre>
+      <id>T1021</id>
+    </mitre>
+    <group>sysmon_event1, lateral_movement</group>
+  </rule>
+
+  <!-- Rule with multiple MITRE techniques using <mitre><id> format -->
+  <rule id="102140" level="8">
+    <description>Execution via Service Creation</description>
+    <if_sid>61605</if_sid>
+    <field>sysmon.event_id:13</field>
+    <mitre>
+      <id>T1569</id>
+    </mitre>
+    <mitre>
+      <id>T1543.003</id>
+    </mitre>
+    <group>sysmon_event13, execution</group>
+  </rule>
+
+  <!-- Rule using old <reference> format (should still work) -->
+  <rule id="102141" level="7">
+    <description>Credential Dumping - LSASS Access</description>
+    <if_sid>61605</if_sid>
+    <reference>
+      <type>attack</type>
+      <technique>T1003.001</technique>
+    </reference>
+    <group>credential_access</group>
+  </rule>
+
+  <!-- Rule with both formats (should deduplicate) -->
+  <rule id="102142" level="9">
+    <description>Mixed format MITRE tags</description>
+    <mitre>
+      <id>T1055</id>
+    </mitre>
+    <reference>
+      <type>attack</type>
+      <technique>T1055</technique>
+    </reference>
+    <reference>
+      <type>attack</type>
+      <technique>T1055.012</technique>
+    </reference>
+    <group>defense_evasion</group>
+  </rule>
+</ruleset>
