@@ -457,6 +457,26 @@ def generate_debug_log(rules: List[RuleData]) -> str:
         lines.append(f"CIS Controls Extracted: {rule.cis_controls}")
         lines.append(f"NIST Controls Extracted: {rule.nist_controls}")
         
+        lines.append("Relationships:")
+        relationships_found = False
+        
+        if rule.detection_cues.if_sid is not None:
+            lines.append(
+                f"  - Rule {rule.rule_id} --if_sid--> {rule.detection_cues.if_sid}"
+            )
+            relationships_found = True
+        
+        for group in rule.detection_cues.if_matched_groups:
+            lines.append(f"  - Rule {rule.rule_id} --if_matched_group--> {group}")
+            relationships_found = True
+        
+        for group in getattr(rule.detection_cues, "if_groups", []):
+            lines.append(f"  - Rule {rule.rule_id} --if_group--> {group}")
+            relationships_found = True
+        
+        if not relationships_found:
+            lines.append("  (none)")
+        
         if rule.filter_conditions:
             lines.append("Filter Conditions Extracted:")
             for i, condition in enumerate(rule.filter_conditions, 1):
