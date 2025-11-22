@@ -390,3 +390,63 @@ def rule_to_dict(rule: RuleData) -> Dict[str, Any]:
         "groups": rule.groups,
         "filter_summary": summarize_filter_logic(rule.filter_conditions),
     }
+
+
+def generate_debug_log(rules: List[RuleData]) -> str:
+    """
+    Generate a comprehensive debug log showing all extracted values for each rule.
+    
+    Args:
+        rules: List of RuleData objects to log
+        
+    Returns:
+        Formatted string with debug information for all rules
+    """
+    if not rules:
+        return "No rules to log."
+    
+    lines = []
+    
+    for rule in rules:
+        lines.append("=" * 60)
+        lines.append("RULE DEBUG LOG")
+        lines.append("=" * 60)
+        lines.append(f"Rule ID: {rule.rule_id}")
+        lines.append(f"Level: {rule.level}")
+        lines.append(f"Description: \"{rule.description}\"")
+        
+        lines.append(f"Groups Extracted: {rule.groups}")
+        lines.append(f"if_sid Extracted: {[rule.detection_cues.if_sid] if rule.detection_cues.if_sid else []}")
+        lines.append(f"if_matched_group Extracted: {rule.detection_cues.if_matched_groups}")
+        lines.append(f"if_group Extracted: {rule.detection_cues.if_groups}")
+        lines.append(f"MITRE Techniques Extracted: {rule.mitre_techniques}")
+        lines.append(f"CIS Controls Extracted: {rule.cis_controls}")
+        lines.append(f"NIST Controls Extracted: {rule.nist_controls}")
+        
+        if rule.filter_conditions:
+            lines.append("Filter Conditions Extracted:")
+            for i, condition in enumerate(rule.filter_conditions, 1):
+                lines.append(f"  Condition {i}:")
+                if condition.match:
+                    lines.append(f"    Match: {condition.match}")
+                if condition.field:
+                    lines.append(f"    Field: {condition.field}")
+                if condition.frequency is not None:
+                    lines.append(f"    Frequency: {condition.frequency}")
+                if condition.timeframe is not None:
+                    lines.append(f"    Timeframe: {condition.timeframe} seconds")
+                if condition.same_field:
+                    lines.append(f"    Same Field: {condition.same_field}")
+                if condition.no_alert is not None:
+                    lines.append(f"    No Alert: {condition.no_alert}")
+                if condition.ignore:
+                    lines.append(f"    Ignore: {condition.ignore}")
+        else:
+            lines.append("Filter Conditions Extracted: (none)")
+        
+        if rule.detection_cues.decoded_as:
+            lines.append(f"Decoded As: {rule.detection_cues.decoded_as}")
+        
+        lines.append("---\n")
+    
+    return "\n".join(lines)

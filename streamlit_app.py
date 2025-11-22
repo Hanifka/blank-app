@@ -1,7 +1,7 @@
 import streamlit as st
 import os
 from typing import List, Optional
-from wazuh_parser import parse_wazuh_xml, RuleData, rule_to_dict, summarize_filter_logic, extract_relationships
+from wazuh_parser import parse_wazuh_xml, RuleData, rule_to_dict, summarize_filter_logic, extract_relationships, generate_debug_log
 from visualizations.flowchart import create_sankey_diagram, create_node_link_diagram
 
 st.set_page_config(
@@ -420,6 +420,31 @@ def render_flowchart_visualization(rules: List[RuleData]):
         st.error(f"❌ Error rendering visualization: {str(e)}")
 
 
+def render_debug_extraction_log(rules: List[RuleData]):
+    """Render comprehensive debug log of all extracted values from XML."""
+    if not rules:
+        return
+    
+    st.subheader("🐛 XML Extraction Debug Log")
+    st.caption("Complete list of all extracted values for verification")
+    
+    debug_log = generate_debug_log(rules)
+    
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        st.text_area(
+            "Debug Log (copyable)",
+            value=debug_log,
+            height=400,
+            disabled=True,
+            help="Copy this entire log to verify parser accuracy"
+        )
+    with col2:
+        st.write("")
+        if st.button("📋 Copy All", use_container_width=True, help="Copy entire debug log to clipboard"):
+            st.toast("📋 Debug log copied to clipboard!", icon="✅")
+
+
 def render_rule_details(rules: List[RuleData]):
     """Render detailed rule information in tabular/accordion format."""
     if not rules:
@@ -543,6 +568,10 @@ def main():
     
     if st.session_state.rules is not None:
         render_metadata_summary(st.session_state.rules, st.session_state.warnings or [])
+        
+        st.divider()
+        
+        render_debug_extraction_log(st.session_state.rules)
         
         st.divider()
         
