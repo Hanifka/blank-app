@@ -121,83 +121,55 @@ def create_node_link_diagram(
     rules: List[RuleData],
     min_level: int = 0,
     layout_type: str = "hierarchical",
-) -> go.Figure:
-    """
-    Create a node-link diagram showing rule relationships.
-    
-    Args:
-        rules: List of RuleData objects to visualize
-        min_level: Minimum severity level to include (0-15)
-        layout_type: Layout type ("hierarchical", "circular", "radial")
-    
-    Returns:
-        Plotly Figure object ready for rendering
-    """
-    # Filter rules by minimum level
-    filtered_rules = [r for r in rules if r.level >= min_level]
-    
+    connection_type: str = "if_sid",
+    selected_groups: Optional[List[str]] = None,
+) -> Dict[str, Any]:
+    """Create an interactive node-link network artifact."""
+    filtered_rules = _filter_rules_by_severity_and_groups(
+        rules,
+        min_level=min_level,
+        selected_groups=selected_groups,
+    )
+
     if not filtered_rules:
-        return _create_empty_figure("No rules match the selected severity level")
-    
-    # Build node positions and connections
-    nodes_dict, edges = _build_node_link_structure(filtered_rules, layout_type)
-    
-    # Create coordinates
-    pos = _calculate_positions(nodes_dict, layout_type)
-    
-    # Extract node and edge information
-    node_labels = list(nodes_dict.keys())
-    node_colors = [nodes_dict[n]["color"] for n in node_labels]
-    node_sizes = [nodes_dict[n]["size"] for n in node_labels]
-    node_hover = [nodes_dict[n]["hover"] for n in node_labels]
-    
-    # Create edge traces
-    edge_traces = []
-    for edge in edges:
-        edge_traces.append(
-            go.Scatter(
-                x=[pos[edge[0]][0], pos[edge[1]][0]],
-                y=[pos[edge[0]][1], pos[edge[1]][1]],
-                mode="lines",
-                line=dict(width=1, color="rgba(125,125,125,0.5)"),
-                hoverinfo="none",
-                showlegend=False,
-            )
-        )
-    
-    # Create node trace
-    node_trace = go.Scatter(
-        x=[pos[n][0] for n in node_labels],
-        y=[pos[n][1] for n in node_labels],
-        mode="markers+text",
-        hovertext=node_hover,
-        hoverinfo="text",
-        text=[n.split("|")[0][:15] for n in node_labels],
-        textposition="top center",
-        textfont=dict(size=9),
-        showlegend=False,
-        marker=dict(
-            size=node_sizes,
-            color=node_colors,
-            line=dict(width=2, color="white"),
-        ),
+        message = "No rules match the selected filters"
+        return {
+            "html": _create_empty_network_html(message),
+            "height": 420,
+            "is_empty": True,
+            "message": message,
+        }
+
+    nodes_metadata = _build_node_metadata(filtered_rules)
+    edges = _build_edges_by_connection_type(
+        filtered_rules,
+        connection_type=connection_type,
+        nodes_metadata=nodes_metadata,
     )
-    
-    # Create figure
-    fig = go.Figure(data=edge_traces + [node_trace])
-    
-    fig.update_layout(
-        title="Rule Relationship Network",
-        showlegend=False,
-        hovermode="closest",
-        margin=dict(b=0, l=0, r=0, t=40),
-        xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
-        yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
-        plot_bgcolor="white",
-        height=600,
+
+    if not edges:
+        message = _format_connection_empty_message(connection_type)
+        return {
+            "html": _create_empty_network_html(message),
+            "height": _determine_network_height(len(nodes_metadata)),
+            "is_empty": True,
+            "message": message,
+        }
+
+    height_px = _determine_network_height(len(nodes_metadata))
+    network_html = _render_pyvis_network(
+        nodes_metadata,
+        edges,
+        layout_type=layout_type,
+        height=height_px,
     )
-    
-    return fig
+
+    return {
+        "html": network_html,
+        "height": height_px,
+        "is_empty": False,
+        "message": "",
+    }
 
 
 def _create_empty_figure(message: str) -> go.Figure:
@@ -499,3 +471,451 @@ def get_severity_color_for_node(node: str) -> str:
         return "#5dade2"
     else:
         return "#95a5a6"
+
+
+def filter_rules_by_severity_and_groups(
+    rules: List[RuleData],
+    min_level: int = 0,
+    max_level: int = 15,
+    groups: Optional[List[str]] = None,
+) -> List[RuleData]:
+    """
+    Filter rules by severity level and/or group membership.
+    
+    Args:
+        rules: List of RuleData objects to filter
+        min_level: Minimum severity level (inclusive)
+        max_level: Maximum severity level (inclusive)
+        groups: Optional list of group names to filter by (OR logic)
+    
+    Returns:
+        Filtered list of RuleData objects
+    """
+    filtered = []
+    
+    for rule in rules:
+        if not (min_level <= rule.level <= max_level):
+            continue
+        
+        if groups:
+            if not any(g in rule.groups for g in groups):
+                continue
+        
+        filtered.append(rule)
+    
+    return filtered
+
+
+def build_edges_by_connection_type(
+    rules: List[RuleData],
+    connection_type: str = "if_sid",
+) -> List[Tuple[str, str, Dict[str, Any]]]:
+    """
+    Construct edges between rules based on connection type.
+    
+    Args:
+        rules: List of RuleData objects
+        connection_type: Either "if_sid" or "if_matched_group"
+    
+    Returns:
+        List of (source_id, target_id, edge_metadata) tuples
+    """
+    from collections import defaultdict
+    
+    edges = []
+    rule_lookup = {rule.rule_id: rule for rule in rules}
+    
+    if connection_type == "if_sid":
+        for rule in rules:
+            if rule.detection_cues.if_sid:
+                parent_id = rule.detection_cues.if_sid
+                if parent_id in rule_lookup:
+                    edges.append((
+                        str(parent_id),
+                        str(rule.rule_id),
+                        {
+                            "type": "if_sid",
+                            "label": "parent→child",
+                            "title": f"Rule {parent_id} triggers Rule {rule.rule_id}",
+                        }
+                    ))
+    
+    elif connection_type == "if_matched_group":
+        group_to_rules = defaultdict(list)
+        for rule in rules:
+            for group in rule.groups:
+                group_to_rules[group].append(rule.rule_id)
+        
+        for rule in rules:
+            if rule.detection_cues.if_matched_groups:
+                for matched_group in rule.detection_cues.if_matched_groups:
+                    if matched_group in group_to_rules:
+                        for source_rule_id in group_to_rules[matched_group]:
+                            if source_rule_id != rule.rule_id:
+                                edges.append((
+                                    str(source_rule_id),
+                                    str(rule.rule_id),
+                                    {
+                                        "type": "if_matched_group",
+                                        "label": f"group:{matched_group}",
+                                        "title": f"Group '{matched_group}' match: {source_rule_id}→{rule.rule_id}",
+                                    }
+                                ))
+    
+    return edges
+
+
+def build_node_metadata(
+    rules: List[RuleData],
+) -> Dict[str, Dict[str, Any]]:
+    """
+    Assemble metadata for each rule node.
+    
+    Args:
+        rules: List of RuleData objects
+    
+    Returns:
+        Dictionary mapping rule_id to node metadata including:
+        - label: Display label
+        - color: Hex color code based on severity
+        - title: HTML hover tooltip
+        - size: Node size
+        - level: Severity level
+        - severity: Severity classification
+        - groups: List of groups
+    """
+    from html import escape
+    
+    nodes = {}
+    
+    for rule in rules:
+        severity = get_severity_label(rule.level)
+        color = get_severity_color(rule.level)
+        
+        groups_str = ", ".join(rule.groups) if rule.groups else "None"
+        filter_summary = summarize_filter_logic(rule.filter_conditions)
+        
+        title_html = f"""
+        <b>Rule {rule.rule_id}</b><br>
+        <b>Description:</b> {escape(rule.description)}<br>
+        <b>Severity:</b> {severity} (Level {rule.level})<br>
+        <b>Groups:</b> {escape(groups_str)}<br>
+        <b>Filters:</b> {escape(filter_summary)}
+        """
+        
+        nodes[str(rule.rule_id)] = {
+            "label": f"Rule {rule.rule_id}",
+            "color": color,
+            "title": title_html.strip(),
+            "size": 20 + (rule.level * 2),
+            "level": rule.level,
+            "severity": severity,
+            "groups": rule.groups,
+        }
+    
+    return nodes
+
+
+def create_interactive_network(
+    rules: List[RuleData],
+    connection_type: str = "if_sid",
+    min_level: int = 0,
+    max_level: int = 15,
+    groups_filter: Optional[List[str]] = None,
+    height: str = "600px",
+    width: str = "100%",
+    physics_enabled: bool = True,
+) -> str:
+    """
+    Create an interactive PyVis network visualization.
+    
+    Args:
+        rules: List of RuleData objects to visualize
+        connection_type: "if_sid" or "if_matched_group"
+        min_level: Minimum severity level to include
+        max_level: Maximum severity level to include
+        groups_filter: Optional list of groups to filter by
+        height: Network height (CSS string, e.g., "600px")
+        width: Network width (CSS string, e.g., "100%")
+        physics_enabled: Whether to enable physics simulation
+    
+    Returns:
+        HTML string containing the interactive network
+    """
+    from pyvis.network import Network
+    import tempfile
+    import os
+    from html import escape
+    
+    filtered_rules = filter_rules_by_severity_and_groups(
+        rules, min_level, max_level, groups_filter
+    )
+    
+    if not filtered_rules:
+        return _create_empty_network_html(
+            "No rules match the selected filters",
+            height,
+            width
+        )
+    
+    net = Network(
+        height=height,
+        width=width,
+        bgcolor="#ffffff",
+        font_color="#000000",
+        notebook=False,
+        directed=True,
+    )
+    
+    if physics_enabled:
+        net.set_options("""
+        {
+          "physics": {
+            "enabled": true,
+            "barnesHut": {
+              "gravitationalConstant": -8000,
+              "centralGravity": 0.3,
+              "springLength": 150,
+              "springConstant": 0.04,
+              "damping": 0.09,
+              "avoidOverlap": 0.1
+            },
+            "stabilization": {
+              "enabled": true,
+              "iterations": 200
+            }
+          },
+          "interaction": {
+            "hover": true,
+            "tooltipDelay": 100,
+            "navigationButtons": true,
+            "keyboard": true
+          },
+          "manipulation": {
+            "enabled": false
+          }
+        }
+        """)
+    else:
+        net.toggle_physics(False)
+    
+    node_metadata = build_node_metadata(filtered_rules)
+    
+    for rule_id, metadata in node_metadata.items():
+        net.add_node(
+            rule_id,
+            label=metadata["label"],
+            color=metadata["color"],
+            title=metadata["title"],
+            size=metadata["size"],
+        )
+    
+    edges = build_edges_by_connection_type(filtered_rules, connection_type)
+    
+    for source, target, edge_meta in edges:
+        if source in node_metadata and target in node_metadata:
+            net.add_edge(
+                source,
+                target,
+                title=edge_meta.get("title", ""),
+                label=edge_meta.get("label", ""),
+                color={"color": "#888888", "highlight": "#000000"},
+                arrows="to",
+            )
+    
+    try:
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False) as f:
+            temp_path = f.name
+        
+        net.save_graph(temp_path)
+        
+        with open(temp_path, 'r', encoding='utf-8') as f:
+            html_content = f.read()
+        
+        os.unlink(temp_path)
+        
+        return html_content
+    
+    except Exception as e:
+        return _create_empty_network_html(
+            f"Error generating network: {str(e)}",
+            height,
+            width
+        )
+
+
+def _create_empty_network_html(
+    message: str,
+    height: str = "600px",
+    width: str = "100%"
+) -> str:
+    """Create an empty network HTML with a message."""
+    from html import escape
+    
+    return f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="utf-8">
+        <style>
+            body {{
+                margin: 0;
+                padding: 0;
+                font-family: Arial, sans-serif;
+            }}
+            .empty-network {{
+                width: {width};
+                height: {height};
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                background-color: #f8f9fa;
+                border: 1px solid #dee2e6;
+                border-radius: 4px;
+            }}
+            .message {{
+                font-size: 18px;
+                color: #6c757d;
+                text-align: center;
+                padding: 20px;
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="empty-network">
+            <div class="message">{escape(message)}</div>
+        </div>
+    </body>
+    </html>
+    """
+
+
+def _filter_rules_by_severity_and_groups(
+    rules: List[RuleData],
+    min_level: int = 0,
+    selected_groups: Optional[List[str]] = None,
+) -> List[RuleData]:
+    """Filter rules by severity and optional group selection."""
+    filtered = [r for r in rules if r.level >= min_level]
+    
+    if selected_groups:
+        filtered = [r for r in filtered if any(g in r.groups for g in selected_groups)]
+    
+    return filtered
+
+
+def _build_node_metadata(rules: List[RuleData]) -> Dict[str, Dict[str, Any]]:
+    """Build metadata for each rule node."""
+    return build_node_metadata(rules)
+
+
+def _build_edges_by_connection_type(
+    rules: List[RuleData],
+    connection_type: str,
+    nodes_metadata: Dict[str, Dict[str, Any]],
+) -> List[Tuple[str, str, Dict[str, Any]]]:
+    """Build edges based on connection type."""
+    return build_edges_by_connection_type(rules, connection_type)
+
+
+def _format_connection_empty_message(connection_type: str) -> str:
+    """Format empty message based on connection type."""
+    if connection_type == "if_matched_group":
+        return "No rules with if_matched_group connections found"
+    return "No rules with if_sid parent relationships found"
+
+
+def _determine_network_height(node_count: int) -> int:
+    """Determine network height based on node count."""
+    base_height = 600
+    return min(base_height + (node_count * 10), 1200)
+
+
+def _render_pyvis_network(
+    nodes_metadata: Dict[str, Dict[str, Any]],
+    edges: List[Tuple[str, str, Dict[str, Any]]],
+    layout_type: str,
+    height: int,
+) -> str:
+    """Render PyVis network to HTML."""
+    from pyvis.network import Network
+    import tempfile
+    import os
+    
+    net = Network(
+        height=f"{height}px",
+        width="100%",
+        bgcolor="#ffffff",
+        font_color="#000000",
+        notebook=False,
+        directed=True,
+    )
+    
+    net.set_options("""
+    {
+      "physics": {
+        "enabled": true,
+        "barnesHut": {
+          "gravitationalConstant": -8000,
+          "centralGravity": 0.3,
+          "springLength": 150,
+          "springConstant": 0.04,
+          "damping": 0.09,
+          "avoidOverlap": 0.1
+        },
+        "stabilization": {
+          "enabled": true,
+          "iterations": 200
+        }
+      },
+      "interaction": {
+        "hover": true,
+        "tooltipDelay": 100,
+        "navigationButtons": true,
+        "keyboard": true
+      },
+      "manipulation": {
+        "enabled": false
+      }
+    }
+    """)
+    
+    for rule_id, metadata in nodes_metadata.items():
+        net.add_node(
+            rule_id,
+            label=metadata["label"],
+            color=metadata["color"],
+            title=metadata["title"],
+            size=metadata["size"],
+        )
+    
+    for source, target, edge_meta in edges:
+        if source in nodes_metadata and target in nodes_metadata:
+            net.add_edge(
+                source,
+                target,
+                title=edge_meta.get("title", ""),
+                label=edge_meta.get("label", ""),
+                color={"color": "#888888", "highlight": "#000000"},
+                arrows="to",
+            )
+    
+    try:
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False) as f:
+            temp_path = f.name
+        
+        net.save_graph(temp_path)
+        
+        with open(temp_path, 'r', encoding='utf-8') as f:
+            html_content = f.read()
+        
+        os.unlink(temp_path)
+        
+        return html_content
+    
+    except Exception as e:
+        from html import escape
+        return _create_empty_network_html(
+            f"Error generating network: {escape(str(e))}",
+            height=f"{height}px"
+        )

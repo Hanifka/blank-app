@@ -31,10 +31,9 @@ SAMPLE_VALID_XML = """<?xml version="1.0" encoding="UTF-8"?>
         <if_sid>1001</if_sid>
     </rule>
     <rule id="1003" level="7">
-        <description>Rule with frequency</description>
-        <frequency>5</frequency>
-        <timeframe>60</timeframe>
-        <same_field>user</same_field>
+        <description>Rule referencing matched group</description>
+        <if_matched_group>web</if_matched_group>
+        <group>web</group>
     </rule>
     <rule id="1004" level="4">
         <description>Rule with match condition</description>
@@ -116,17 +115,13 @@ class TestWazuhParserBasic(unittest.TestCase):
         rule = [r for r in rules if r.rule_id == 1002][0]
         self.assertEqual(rule.detection_cues.if_sid, 1001)
 
-    def test_parse_rule_with_frequency(self):
-        """Test parsing frequency-based conditions."""
+    def test_parse_rule_with_matched_group(self):
+        """Test parsing if_matched_group conditions."""
         rules, warnings = parse_wazuh_xml(SAMPLE_VALID_XML)
 
         rule = [r for r in rules if r.rule_id == 1003][0]
-        self.assertEqual(len(rule.filter_conditions), 1)
-
-        cond = rule.filter_conditions[0]
-        self.assertEqual(cond.frequency, 5)
-        self.assertEqual(cond.timeframe, 60)
-        self.assertEqual(cond.same_field, "user")
+        self.assertEqual(len(rule.detection_cues.if_matched_groups), 1)
+        self.assertIn("web", rule.detection_cues.if_matched_groups)
 
     def test_parse_rule_with_match(self):
         """Test parsing match conditions."""

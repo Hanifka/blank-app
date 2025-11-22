@@ -18,6 +18,7 @@ class DetectionCues:
     """Captures detection-related information from a rule."""
     decoded_as: Optional[str] = None
     if_sid: Optional[int] = None
+    if_matched_groups: List[str] = field(default_factory=list)
     description: Optional[str] = None
 
 
@@ -156,6 +157,7 @@ def _parse_detection_cues(rule_elem: ET.Element) -> DetectionCues:
     """Extract detection-related cues from a rule element."""
     decoded_as = None
     if_sid = None
+    if_matched_groups = []
     description = None
 
     # Look for decoded_as in decoder/program_name pattern
@@ -173,6 +175,11 @@ def _parse_detection_cues(rule_elem: ET.Element) -> DetectionCues:
         except ValueError:
             pass
 
+    # Look for if_matched_group (parent rule groups)
+    for if_matched_group_elem in rule_elem.findall("if_matched_group"):
+        if if_matched_group_elem is not None and if_matched_group_elem.text:
+            if_matched_groups.append(if_matched_group_elem.text.strip())
+
     # Description for detection cues
     description_elem = rule_elem.find("description")
     if description_elem is not None and description_elem.text:
@@ -181,6 +188,7 @@ def _parse_detection_cues(rule_elem: ET.Element) -> DetectionCues:
     return DetectionCues(
         decoded_as=decoded_as,
         if_sid=if_sid,
+        if_matched_groups=if_matched_groups,
         description=description,
     )
 
