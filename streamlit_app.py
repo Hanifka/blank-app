@@ -234,7 +234,7 @@ def render_flowchart_visualization(rules: List[RuleData]):
     with col1:
         viz_type = st.selectbox(
             "Visualization Type",
-            options=["Sankey Diagram", "Node-Link Network"],
+            options=["Sankey Diagram", "Interactive Network"],
             help="Choose how to visualize rule flows"
         )
     
@@ -254,10 +254,21 @@ def render_flowchart_visualization(rules: List[RuleData]):
                 help="Adjust diagram density"
             )
         else:
-            layout_type = st.selectbox(
-                "Layout",
-                options=["hierarchical", "circular", "radial"],
-                help="Choose network layout type"
+            connection_type = st.selectbox(
+                "Connection Type",
+                options=["if_sid", "if_matched_group"],
+                format_func=lambda x: "Parent Chain (if_sid)" if x == "if_sid" else "Group Correlation (if_matched_group)",
+                help="Choose whether to visualize parent-child rule chains or matched group correlations"
+            )
+    
+    if viz_type == "Interactive Network":
+        all_groups = sorted({g for rule in rules for g in rule.groups if g})
+        selected_groups = None
+        if all_groups:
+            selected_groups = st.multiselect(
+                "Filter by group (optional)",
+                options=all_groups,
+                help="Limit the network to specific rule groups"
             )
     
     try:
@@ -267,14 +278,23 @@ def render_flowchart_visualization(rules: List[RuleData]):
                 min_level=min_severity,
                 layout_density=layout_density
             )
+            st.plotly_chart(fig, use_container_width=True, config={"responsive": True})
         else:
-            fig = create_node_link_diagram(
+            network_result = create_node_link_diagram(
                 rules,
                 min_level=min_severity,
-                layout_type=layout_type
+                layout_type="hierarchical",
+                connection_type=connection_type,
+                selected_groups=selected_groups if selected_groups else None,
             )
-        
-        st.plotly_chart(fig, use_container_width=True, config={"responsive": True})
+            if network_result.get("is_empty"):
+                st.info(network_result.get("message", "No network data to display"))
+            else:
+                st.components.v1.html(
+                    network_result["html"],
+                    height=network_result.get("height", 720),
+                    scrolling=True
+                )
     except Exception as e:
         st.error(f"❌ Error rendering visualization: {str(e)}")
 
