@@ -106,7 +106,7 @@ def render_file_upload():
     """Render the file upload section and return XML content."""
     st.subheader("📁 Load Wazuh Rules")
     
-    col1, col2, col3 = st.columns([2, 1, 1])
+    col1, col2, col3, col4 = st.columns([2, 1, 1, 1])
     
     with col1:
         uploaded_file = st.file_uploader(
