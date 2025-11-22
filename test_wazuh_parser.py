@@ -18,6 +18,7 @@ from wazuh_parser import (
     FilterCondition,
     summarize_filter_logic,
     rule_to_dict,
+    extract_relationships,
 )
 
 
@@ -35,11 +36,16 @@ SAMPLE_VALID_XML = """<?xml version="1.0" encoding="UTF-8"?>
         <if_matched_group>web</if_matched_group>
         <group>web</group>
     </rule>
-    <rule id="1004" level="4">
+    <rule id="1004" level="6">
+        <description>Rule referencing if_group</description>
+        <if_group>sysmon_event3</if_group>
+        <group>sysmon, network</group>
+    </rule>
+    <rule id="1005" level="4">
         <description>Rule with match condition</description>
         <match>.*error.*</match>
     </rule>
-    <rule id="1005" level="6">
+    <rule id="1006" level="6">
         <description>Rule with no alert</description>
         <no_alert/>
     </rule>
@@ -99,7 +105,7 @@ class TestWazuhParserBasic(unittest.TestCase):
         """Test parsing a valid XML document with multiple rules."""
         rules, warnings = parse_wazuh_xml(SAMPLE_VALID_XML)
 
-        self.assertEqual(len(rules), 5)
+        self.assertEqual(len(rules), 6)
         self.assertEqual(len(warnings), 0)
 
         # Verify first rule
@@ -123,11 +129,19 @@ class TestWazuhParserBasic(unittest.TestCase):
         self.assertEqual(len(rule.detection_cues.if_matched_groups), 1)
         self.assertIn("web", rule.detection_cues.if_matched_groups)
 
+    def test_parse_rule_with_if_group(self):
+        """Test parsing if_group conditions."""
+        rules, warnings = parse_wazuh_xml(SAMPLE_VALID_XML)
+
+        rule = [r for r in rules if r.rule_id == 1004][0]
+        self.assertEqual(len(rule.detection_cues.if_groups), 1)
+        self.assertIn("sysmon_event3", rule.detection_cues.if_groups)
+
     def test_parse_rule_with_match(self):
         """Test parsing match conditions."""
         rules, warnings = parse_wazuh_xml(SAMPLE_VALID_XML)
 
-        rule = [r for r in rules if r.rule_id == 1004][0]
+        rule = [r for r in rules if r.rule_id == 1005][0]
         self.assertEqual(len(rule.filter_conditions), 1)
         self.assertEqual(rule.filter_conditions[0].match, ".*error.*")
 
@@ -135,7 +149,7 @@ class TestWazuhParserBasic(unittest.TestCase):
         """Test parsing no_alert conditions."""
         rules, warnings = parse_wazuh_xml(SAMPLE_VALID_XML)
 
-        rule = [r for r in rules if r.rule_id == 1005][0]
+        rule = [r for r in rules if r.rule_id == 1006][0]
         self.assertEqual(len(rule.filter_conditions), 1)
         self.assertTrue(rule.filter_conditions[0].no_alert)
 
@@ -255,6 +269,8 @@ class TestRuleToDict(unittest.TestCase):
             detection_cues=DetectionCues(
                 decoded_as="nginx",
                 if_sid=None,
+                if_matched_groups=[],
+                if_groups=[],
                 description="Test rule"
             ),
             filter_conditions=[
@@ -274,6 +290,37 @@ class TestRuleToDict(unittest.TestCase):
         self.assertIn("filter_summary", result)
         self.assertIsInstance(result["detection_cues"], dict)
         self.assertIsInstance(result["filter_conditions"], list)
+
+
+class TestRelationshipExtraction(unittest.TestCase):
+    """Test relationship extraction functionality."""
+
+    def test_extract_relationships(self):
+        """Test extracting all relationship types from rules."""
+        rules, _ = parse_wazuh_xml(SAMPLE_VALID_XML)
+        
+        relationships = extract_relationships(rules)
+        
+        # Should have relationships from if_sid, if_matched_group, and if_group
+        self.assertGreater(len(relationships), 0)
+        
+        # Check if_sid relationship
+        if_sid_rels = [r for r in relationships if r["relationship_type"] == "if_sid"]
+        self.assertEqual(len(if_sid_rels), 1)
+        self.assertEqual(if_sid_rels[0]["source_rule_id"], 1002)
+        self.assertEqual(if_sid_rels[0]["target_rule_id"], 1001)
+        
+        # Check if_matched_group relationship
+        if_matched_rels = [r for r in relationships if r["relationship_type"] == "if_matched_group"]
+        self.assertEqual(len(if_matched_rels), 1)
+        self.assertEqual(if_matched_rels[0]["source_rule_id"], 1003)
+        self.assertEqual(if_matched_rels[0]["target_group"], "web")
+        
+        # Check if_group relationship
+        if_group_rels = [r for r in relationships if r["relationship_type"] == "if_group"]
+        self.assertEqual(len(if_group_rels), 1)
+        self.assertEqual(if_group_rels[0]["source_rule_id"], 1004)
+        self.assertEqual(if_group_rels[0]["target_group"], "sysmon_event3")
 
 
 if __name__ == "__main__":
