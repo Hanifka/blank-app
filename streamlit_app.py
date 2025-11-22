@@ -353,6 +353,11 @@ def render_rule_details(rules: List[RuleData]):
                     for group in rule.groups:
                         st.markdown(f"• {group}")
                 
+                if rule.if_matched_groups:
+                    st.markdown("**Matched Groups:**")
+                    for group in rule.if_matched_groups:
+                        st.markdown(f"• {group}")
+                
                 if rule.mitre_techniques:
                     st.markdown("**MITRE ATT&CK:**")
                     for technique in rule.mitre_techniques:

@@ -87,4 +87,20 @@
     <ignore>white_list_admin</ignore>
     <group>web, authentication, brute_force</group>
   </rule>
+
+  <!-- Rule with single if_matched_group -->
+  <rule id="100011" level="6">
+    <description>Rule matching authentication group</description>
+    <if_matched_group>authentication</if_matched_group>
+    <group>web, security</group>
+  </rule>
+
+  <!-- Rule with multiple if_matched_group elements and comma-separated values -->
+  <rule id="100012" level="7">
+    <description>Rule matching multiple groups</description>
+    <if_matched_group>web, injection</if_matched_group>
+    <if_matched_group>application_attack</if_matched_group>
+    <if_matched_group>reconnaissance, credential_access</if_matched_group>
+    <group>advanced_threat</group>
+  </rule>
 </ruleset>

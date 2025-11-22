@@ -92,6 +92,35 @@ SAMPLE_EMPTY_XML = """<?xml version="1.0" encoding="UTF-8"?>
 </ruleset>
 """
 
+SAMPLE_WITH_IF_MATCHED_GROUP = """<?xml version="1.0" encoding="UTF-8"?>
+<ruleset>
+    <rule id="5001" level="5">
+        <description>Rule with single if_matched_group</description>
+        <if_matched_group>authentication</if_matched_group>
+    </rule>
+</ruleset>
+"""
+
+SAMPLE_WITH_MULTIPLE_IF_MATCHED_GROUPS = """<?xml version="1.0" encoding="UTF-8"?>
+<ruleset>
+    <rule id="6001" level="7">
+        <description>Rule with multiple if_matched_group elements</description>
+        <if_matched_group>web, injection</if_matched_group>
+        <if_matched_group>application_attack</if_matched_group>
+        <if_matched_group>reconnaissance, credential_access</if_matched_group>
+    </rule>
+</ruleset>
+"""
+
+SAMPLE_WITH_IF_MATCHED_GROUP_WHITESPACE = """<?xml version="1.0" encoding="UTF-8"?>
+<ruleset>
+    <rule id="7001" level="6">
+        <description>Rule with if_matched_group containing whitespace</description>
+        <if_matched_group>  web  ,  authentication  ,  brute_force  </if_matched_group>
+    </rule>
+</ruleset>
+"""
+
 
 class TestWazuhParserBasic(unittest.TestCase):
     """Test basic rule parsing functionality."""
@@ -269,6 +298,7 @@ class TestRuleToDict(unittest.TestCase):
             cis_controls=["4.1"],
             nist_controls=["AC-2"],
             groups=["web"],
+            if_matched_groups=["authentication", "web"],
         )
 
         result = rule_to_dict(rule)
@@ -277,8 +307,64 @@ class TestRuleToDict(unittest.TestCase):
         self.assertEqual(result["level"], 3)
         self.assertEqual(result["description"], "Test rule")
         self.assertIn("filter_summary", result)
+        self.assertIn("if_matched_groups", result)
+        self.assertEqual(result["if_matched_groups"], ["authentication", "web"])
         self.assertIsInstance(result["detection_cues"], dict)
         self.assertIsInstance(result["filter_conditions"], list)
+
+
+class TestIfMatchedGroups(unittest.TestCase):
+    """Test if_matched_group parsing."""
+
+    def test_single_if_matched_group(self):
+        """Test parsing a rule with single if_matched_group."""
+        rules, warnings = parse_wazuh_xml(SAMPLE_WITH_IF_MATCHED_GROUP)
+
+        self.assertEqual(len(rules), 1)
+        self.assertEqual(len(warnings), 0)
+        rule = rules[0]
+        self.assertEqual(rule.rule_id, 5001)
+        self.assertEqual(len(rule.if_matched_groups), 1)
+        self.assertIn("authentication", rule.if_matched_groups)
+
+    def test_multiple_if_matched_groups(self):
+        """Test parsing a rule with multiple if_matched_group elements."""
+        rules, warnings = parse_wazuh_xml(SAMPLE_WITH_MULTIPLE_IF_MATCHED_GROUPS)
+
+        self.assertEqual(len(rules), 1)
+        self.assertEqual(len(warnings), 0)
+        rule = rules[0]
+        self.assertEqual(rule.rule_id, 6001)
+        self.assertEqual(len(rule.if_matched_groups), 5)
+        self.assertIn("web", rule.if_matched_groups)
+        self.assertIn("injection", rule.if_matched_groups)
+        self.assertIn("application_attack", rule.if_matched_groups)
+        self.assertIn("reconnaissance", rule.if_matched_groups)
+        self.assertIn("credential_access", rule.if_matched_groups)
+
+    def test_if_matched_group_whitespace_trimming(self):
+        """Test that whitespace is properly trimmed from if_matched_group values."""
+        rules, warnings = parse_wazuh_xml(SAMPLE_WITH_IF_MATCHED_GROUP_WHITESPACE)
+
+        self.assertEqual(len(rules), 1)
+        self.assertEqual(len(warnings), 0)
+        rule = rules[0]
+        self.assertEqual(rule.rule_id, 7001)
+        self.assertEqual(len(rule.if_matched_groups), 3)
+        self.assertIn("web", rule.if_matched_groups)
+        self.assertIn("authentication", rule.if_matched_groups)
+        self.assertIn("brute_force", rule.if_matched_groups)
+        for group in rule.if_matched_groups:
+            self.assertEqual(group, group.strip())
+
+    def test_rule_without_if_matched_group(self):
+        """Test that rules without if_matched_group have empty list."""
+        rules, warnings = parse_wazuh_xml(SAMPLE_VALID_XML)
+
+        self.assertEqual(len(rules), 5)
+        for rule in rules:
+            self.assertIsInstance(rule.if_matched_groups, list)
+            self.assertEqual(len(rule.if_matched_groups), 0)
 
 
 if __name__ == "__main__":

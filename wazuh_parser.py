@@ -45,6 +45,7 @@ class RuleData:
     cis_controls: List[str] = field(default_factory=list)
     nist_controls: List[str] = field(default_factory=list)
     groups: List[str] = field(default_factory=list)
+    if_matched_groups: List[str] = field(default_factory=list)
 
 
 def parse_wazuh_xml(
@@ -139,6 +140,13 @@ def _parse_rule_element(rule_elem: ET.Element) -> Optional[RuleData]:
     if groups_elem is not None and groups_elem.text:
         groups = [g.strip() for g in groups_elem.text.split(",")]
 
+    # Extract if_matched_group relationships
+    if_matched_groups = []
+    for elem in rule_elem.findall("if_matched_group"):
+        if elem.text:
+            group_values = [g.strip() for g in elem.text.split(",")]
+            if_matched_groups.extend(group_values)
+
     return RuleData(
         rule_id=rule_id,
         level=level,
@@ -149,6 +157,7 @@ def _parse_rule_element(rule_elem: ET.Element) -> Optional[RuleData]:
         cis_controls=cis_controls,
         nist_controls=nist_controls,
         groups=groups,
+        if_matched_groups=if_matched_groups,
     )
 
 
@@ -318,5 +327,6 @@ def rule_to_dict(rule: RuleData) -> Dict[str, Any]:
         "cis_controls": rule.cis_controls,
         "nist_controls": rule.nist_controls,
         "groups": rule.groups,
+        "if_matched_groups": rule.if_matched_groups,
         "filter_summary": summarize_filter_logic(rule.filter_conditions),
     }
