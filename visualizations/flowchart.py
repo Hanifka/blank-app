@@ -584,8 +584,8 @@ def build_edges_by_connection_type(
                 group_to_rules[group].append(rule.rule_id)
         
         for rule in rules:
-            if rule.detection_cues.if_groups:
-                for group_name in rule.detection_cues.if_groups:
+            if getattr(rule.detection_cues, 'if_groups', []):
+                for group_name in getattr(rule.detection_cues, 'if_groups', []):
                     if group_name in group_to_rules:
                         for source_rule_id in group_to_rules[group_name]:
                             if source_rule_id != rule.rule_id:

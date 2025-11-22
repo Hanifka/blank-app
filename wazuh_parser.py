@@ -357,7 +357,7 @@ def extract_relationships(rules: List[RuleData]) -> List[Dict[str, Any]]:
             })
         
         # if_group relationships
-        for group in rule.detection_cues.if_groups:
+        for group in getattr(rule.detection_cues, 'if_groups', []):
             relationships.append({
                 "source_rule_id": rule.rule_id,
                 "target_group": group,
@@ -418,7 +418,7 @@ def generate_debug_log(rules: List[RuleData]) -> str:
         lines.append(f"Groups Extracted: {rule.groups}")
         lines.append(f"if_sid Extracted: {[rule.detection_cues.if_sid] if rule.detection_cues.if_sid else []}")
         lines.append(f"if_matched_group Extracted: {rule.detection_cues.if_matched_groups}")
-        lines.append(f"if_group Extracted: {rule.detection_cues.if_groups}")
+        lines.append(f"if_group Extracted: {getattr(rule.detection_cues, 'if_groups', [])}")
         lines.append(f"MITRE Techniques Extracted: {rule.mitre_techniques}")
         lines.append(f"CIS Controls Extracted: {rule.cis_controls}")
         lines.append(f"NIST Controls Extracted: {rule.nist_controls}")

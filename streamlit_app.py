@@ -303,7 +303,7 @@ def render_relationship_debug_section(rules: List[RuleData], xml_content: str):
         # Determine rule type and color
         is_parent = any(r["target_rule_id"] == rule.rule_id and r["relationship_type"] == "if_sid" for r in relationships)
         has_if_matched_group = bool(rule.detection_cues.if_matched_groups)
-        has_if_group = bool(rule.detection_cues.if_groups)
+        has_if_group = bool(getattr(rule.detection_cues, 'if_groups', []))
         has_if_sid = bool(rule.detection_cues.if_sid)
         
         if is_parent:
@@ -329,8 +329,8 @@ def render_relationship_debug_section(rules: List[RuleData], xml_content: str):
             rule_info += f" → Parent: {rule.detection_cues.if_sid}"
         if rule.detection_cues.if_matched_groups:
             rule_info += f" → Groups: {', '.join(rule.detection_cues.if_matched_groups)}"
-        if rule.detection_cues.if_groups:
-            rule_info += f" → Groups: {', '.join(rule.detection_cues.if_groups)}"
+        if getattr(rule.detection_cues, 'if_groups', []):
+            rule_info += f" → Groups: {', '.join(getattr(rule.detection_cues, 'if_groups', []))}"
         
         st.markdown(f'<span style="color:{rule_color}">{rule_info}</span>', unsafe_allow_html=True)
     
