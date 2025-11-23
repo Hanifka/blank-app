@@ -494,6 +494,10 @@ def main():
         
         Version: 1.1.0
         
+        Copyright © 2025 Hanifka  
+        Licensed under the Apache License, Version 2.0. See the LICENSE file for details.  
+        **Owner:** Hanifka
+        
         This tool parses and visualizes Wazuh XML security rules, helping analysts understand 
         detection logic, severity levels, and compliance mappings.
         
