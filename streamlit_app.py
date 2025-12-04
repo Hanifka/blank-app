@@ -2,7 +2,7 @@ import streamlit as st
 import os
 from typing import List, Optional
 from wazuh_parser import parse_wazuh_xml, RuleData, rule_to_dict, summarize_filter_logic, generate_debug_log
-from visualizations.flowchart import create_sankey_diagram, create_node_link_diagram
+from visualizations.flowchart import create_node_link_diagram
 
 st.set_page_config(
     page_title="Wazuh Rule Visualizer",
@@ -244,19 +244,24 @@ def render_metadata_summary(rules: List[RuleData], warnings: List[str]):
 
 
 def render_flowchart_visualization(rules: List[RuleData]):
-    """Render interactive flowchart visualizations."""
+    """Render interactive Graphistry network visualization."""
     if not rules:
         return
     
-    st.subheader("📊 Rule Flow Visualization")
+    st.subheader("📊 Rule Relationship Network")
     
-    col1, col2, col3 = st.columns([2, 1, 1])
+    col1, col2 = st.columns([2, 1])
     
     with col1:
-        viz_type = st.selectbox(
-            "Visualization Type",
-            options=["Sankey Diagram", "Interactive Network"],
-            help="Choose how to visualize rule flows"
+        connection_type = st.selectbox(
+            "Connection Type",
+            options=["if_sid", "if_matched_group", "if_group"],
+            format_func=lambda x: {
+                "if_sid": "Parent Chain (if_sid)",
+                "if_matched_group": "Group Correlation (if_matched_group)",
+                "if_group": "Group Correlation (if_group)"
+            }[x],
+            help="Choose which relationship type to visualize"
         )
     
     with col2:
@@ -267,59 +272,31 @@ def render_flowchart_visualization(rules: List[RuleData]):
             help="Filter rules by minimum severity level"
         )
     
-    with col3:
-        if viz_type == "Sankey Diagram":
-            layout_density = st.selectbox(
-                "Layout",
-                options=["compact", "normal", "sparse"],
-                help="Adjust diagram density"
-            )
-        else:
-            connection_type = st.selectbox(
-                "Connection Type",
-                options=["if_sid", "if_matched_group", "if_group"],
-                format_func=lambda x: {
-                    "if_sid": "Parent Chain (if_sid)",
-                    "if_matched_group": "Group Correlation (if_matched_group)",
-                    "if_group": "Group Correlation (if_group)"
-                }[x],
-                help="Choose which relationship type to visualize"
-            )
-    
-    if viz_type == "Interactive Network":
-        all_groups = sorted({g for rule in rules for g in rule.groups if g})
-        selected_groups = None
-        if all_groups:
-            selected_groups = st.multiselect(
-                "Filter by group (optional)",
-                options=all_groups,
-                help="Limit the network to specific rule groups"
-            )
+    all_groups = sorted({g for rule in rules for g in rule.groups if g})
+    selected_groups = None
+    if all_groups:
+        selected_groups = st.multiselect(
+            "Filter by group (optional)",
+            options=all_groups,
+            help="Limit the network to specific rule groups"
+        )
     
     try:
-        if viz_type == "Sankey Diagram":
-            fig = create_sankey_diagram(
-                rules,
-                min_level=min_severity,
-                layout_density=layout_density
-            )
-            st.plotly_chart(fig, use_container_width=True, config={"responsive": True})
+        network_result = create_node_link_diagram(
+            rules,
+            min_level=min_severity,
+            layout_type="hierarchical",
+            connection_type=connection_type,
+            selected_groups=selected_groups if selected_groups else None,
+        )
+        if network_result.get("is_empty"):
+            st.info(network_result.get("message", "No network data to display"))
         else:
-            network_result = create_node_link_diagram(
-                rules,
-                min_level=min_severity,
-                layout_type="hierarchical",
-                connection_type=connection_type,
-                selected_groups=selected_groups if selected_groups else None,
+            st.components.v1.iframe(
+                network_result["url"],
+                height=network_result.get("height", 720),
+                scrolling=True
             )
-            if network_result.get("is_empty"):
-                st.info(network_result.get("message", "No network data to display"))
-            else:
-                st.components.v1.html(
-                    network_result["html"],
-                    height=network_result.get("height", 720),
-                    scrolling=True
-                )
     except Exception as e:
         st.error(f"❌ Error rendering visualization: {str(e)}")
 
@@ -505,7 +482,7 @@ def main():
         - 📁 XML file upload with validation
         - 📝 Direct XML paste input
         - 📊 Rule statistics and metrics
-        - 📈 Interactive flowchart visualizations (Sankey & Node-Link)
+        - 📈 Interactive Graphistry network visualizations
         - 🔍 Search and filter capabilities
         - 🎯 MITRE ATT&CK integration
         - 🔄 Cached parsing for performance
