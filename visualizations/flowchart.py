@@ -49,6 +49,8 @@ def create_node_link_diagram(
     layout_type: str = "hierarchical",
     connection_type: str = "if_sid",
     selected_groups: Optional[List[str]] = None,
+    personal_key_id: Optional[str] = None,
+    personal_key_secret: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Create an interactive node-link network artifact using Graphistry.
@@ -59,6 +61,8 @@ def create_node_link_diagram(
         layout_type: Layout type for the network (kept for compatibility, not used by Graphistry)
         connection_type: Relationship type to visualize ("if_sid", "if_matched_group", or "if_group")
         selected_groups: Optional list of groups to filter by
+        personal_key_id: Optional Graphistry personal key ID for authentication
+        personal_key_secret: Optional Graphistry personal key secret for authentication
         
     Returns:
         Dictionary with Graphistry URL, height, and metadata
@@ -95,7 +99,17 @@ def create_node_link_diagram(
     try:
         import graphistry
         
-        graphistry.register(api=3, protocol="https", server="hub.graphistry.com")
+        # Use personal key credentials if provided, otherwise fall back to default
+        if personal_key_id and personal_key_secret:
+            graphistry.register(
+                api=3,
+                protocol="https",
+                server="hub.graphistry.com",
+                personal_key_id=personal_key_id,
+                personal_key_secret=personal_key_secret
+            )
+        else:
+            graphistry.register(api=3, protocol="https", server="hub.graphistry.com")
         
         g = graphistry.edges(edges_df, "source", "target").nodes(nodes_df, "node_id")
         
@@ -121,7 +135,7 @@ def create_node_link_diagram(
             "url": None,
             "height": 600,
             "is_empty": True,
-            "message": f"Graphistry initialization failed: {str(e)}. Please configure GRAPHISTRY_API_KEY or use personal authentication.",
+            "message": f"Graphistry initialization failed: {str(e)}. Please configure personal authentication credentials.",
         }
 
 
@@ -353,6 +367,8 @@ def create_interactive_network(
     height: str = "600px",
     width: str = "100%",
     physics_enabled: bool = True,
+    personal_key_id: Optional[str] = None,
+    personal_key_secret: Optional[str] = None,
 ) -> str:
     """
     Create an interactive Graphistry network visualization.
@@ -366,6 +382,8 @@ def create_interactive_network(
         height: Network height (CSS string, e.g., "600px")
         width: Network width (CSS string, e.g., "100%")
         physics_enabled: Whether to enable physics simulation (kept for compatibility)
+        personal_key_id: Optional Graphistry personal key ID for authentication
+        personal_key_secret: Optional Graphistry personal key secret for authentication
     
     Returns:
         HTML string containing the interactive network
@@ -376,6 +394,8 @@ def create_interactive_network(
         layout_type="hierarchical",
         connection_type=connection_type,
         selected_groups=groups_filter,
+        personal_key_id=personal_key_id,
+        personal_key_secret=personal_key_secret,
     )
     
     if result.get("is_empty"):

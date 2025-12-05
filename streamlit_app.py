@@ -288,6 +288,8 @@ def render_flowchart_visualization(rules: List[RuleData]):
             layout_type="hierarchical",
             connection_type=connection_type,
             selected_groups=selected_groups if selected_groups else None,
+            personal_key_id=st.session_state.get("graphistry_personal_key_id"),
+            personal_key_secret=st.session_state.get("graphistry_personal_key_secret"),
         )
         if network_result.get("is_empty"):
             st.info(network_result.get("message", "No network data to display"))
@@ -324,6 +326,74 @@ def render_debug_extraction_log(rules: List[RuleData]):
         st.write("")
         if st.button("📋 Copy All", use_container_width=True, help="Copy entire debug log to clipboard"):
             st.toast("📋 Debug log copied to clipboard!", icon="✅")
+
+
+def render_graphistry_auth_form():
+    """Render Graphistry authentication form."""
+    st.subheader("🔐 Graphistry Authentication")
+    
+    if st.session_state.get("graphistry_authenticated", False):
+        st.success("✅ **Authenticated with Graphistry**")
+        
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            st.info(f"Personal Key ID: `{st.session_state.get('graphistry_personal_key_id', '')}`")
+        with col2:
+            if st.button("🚪 Logout", use_container_width=True):
+                st.session_state.graphistry_authenticated = False
+                st.session_state.graphistry_personal_key_id = ""
+                st.session_state.graphistry_personal_key_secret = ""
+                st.rerun()
+    else:
+        with st.container():
+            st.markdown("""
+            **Graphistry Authentication Required**
+            
+            To view interactive network visualizations, please authenticate with your Graphistry personal key credentials.
+            """)
+            
+            with st.form("graphistry_auth_form"):
+                key_id = st.text_input(
+                    "Personal Key ID",
+                    value=st.session_state.get("graphistry_personal_key_id", ""),
+                    help="Your Graphistry personal key ID"
+                )
+                
+                key_secret = st.text_input(
+                    "Personal Key Secret",
+                    value=st.session_state.get("graphistry_personal_key_secret", ""),
+                    type="password",
+                    help="Your Graphistry personal key secret"
+                )
+                
+                submitted = st.form_submit_button("Authenticate", use_container_width=True)
+                
+                if submitted:
+                    if not key_id.strip() or not key_secret.strip():
+                        st.error("❌ Please provide both Personal Key ID and Secret")
+                        return
+                    
+                    try:
+                        import graphistry
+                        
+                        graphistry.register(
+                            api=3,
+                            protocol="https",
+                            server="hub.graphistry.com",
+                            personal_key_id=key_id.strip(),
+                            personal_key_secret=key_secret.strip()
+                        )
+                        
+                        st.session_state.graphistry_personal_key_id = key_id.strip()
+                        st.session_state.graphistry_personal_key_secret = key_secret.strip()
+                        st.session_state.graphistry_authenticated = True
+                        
+                        st.success("✅ Graphistry authenticated successfully!")
+                        st.rerun()
+                        
+                    except Exception as e:
+                        st.session_state.graphistry_authenticated = False
+                        st.error(f"❌ Authentication failed: {str(e)}")
 
 
 def render_rule_details(rules: List[RuleData]):
@@ -426,6 +496,12 @@ def main():
         st.session_state.xml_content = None
     if "show_paste_input" not in st.session_state:
         st.session_state.show_paste_input = False
+    if "graphistry_authenticated" not in st.session_state:
+        st.session_state.graphistry_authenticated = False
+    if "graphistry_personal_key_id" not in st.session_state:
+        st.session_state.graphistry_personal_key_id = ""
+    if "graphistry_personal_key_secret" not in st.session_state:
+        st.session_state.graphistry_personal_key_secret = ""
     
     render_instructions()
     
@@ -456,7 +532,11 @@ def main():
         
         st.divider()
         
-        render_flowchart_visualization(st.session_state.rules)
+        # Show Graphistry authentication form or visualizations
+        render_graphistry_auth_form()
+        
+        if st.session_state.get("graphistry_authenticated", False):
+            render_flowchart_visualization(st.session_state.rules)
         
         st.divider()
         
