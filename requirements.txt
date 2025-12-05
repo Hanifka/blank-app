@@ -1,3 +1,6 @@
 streamlit
-graphistry
+networkx
+plotly
 pandas
+numpy
+scipy

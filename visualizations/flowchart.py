@@ -1,17 +1,16 @@
 """
-Flowchart visualization module for Wazuh rules using Graphistry.
+Flowchart visualization module for Wazuh rules using NetworkX and Plotly.
 
-Provides interactive network visualizations showing rule relationships
-with color-coding by severity levels, hover tooltips, and interactive 
-controls for exploring rule hierarchies.
+Provides interactive hierarchical network visualizations showing rule relationships
+with color-coding by severity levels, hover tooltips, and interactive controls
+for exploring rule hierarchies.
 """
 
-import os
-from functools import lru_cache
 from typing import List, Dict, Tuple, Optional, Any
+from collections import defaultdict
 
-import pandas as pd
-
+import networkx as nx
+import plotly.graph_objects as go
 from wazuh_parser import RuleData, summarize_filter_logic
 
 
@@ -49,23 +48,19 @@ def create_node_link_diagram(
     layout_type: str = "hierarchical",
     connection_type: str = "if_sid",
     selected_groups: Optional[List[str]] = None,
-    personal_key_id: Optional[str] = None,
-    personal_key_secret: Optional[str] = None,
-) -> Dict[str, Any]:
+) -> go.Figure:
     """
-    Create an interactive node-link network artifact using Graphistry.
+    Create an interactive hierarchical network visualization using NetworkX and Plotly.
     
     Args:
         rules: List of RuleData objects to visualize
         min_level: Minimum severity level to include
-        layout_type: Layout type for the network (kept for compatibility, not used by Graphistry)
+        layout_type: Layout type for the network (hierarchical, spring, kamada_kawai)
         connection_type: Relationship type to visualize ("if_sid", "if_matched_group", or "if_group")
         selected_groups: Optional list of groups to filter by
-        personal_key_id: Optional Graphistry personal key ID for authentication
-        personal_key_secret: Optional Graphistry personal key secret for authentication
         
     Returns:
-        Dictionary with Graphistry URL, height, and metadata
+        Plotly Figure object for interactive visualization
     """
     filtered_rules = _filter_rules_by_severity_and_groups(
         rules,
@@ -74,127 +69,323 @@ def create_node_link_diagram(
     )
 
     if not filtered_rules:
-        message = "No rules match the selected filters"
-        return {
-            "url": None,
-            "height": 420,
-            "is_empty": True,
-            "message": message,
-        }
+        return _create_empty_figure("No rules match the selected filters")
 
-    nodes_df, edges_df = _build_graphistry_dataframes(
-        filtered_rules,
-        connection_type=connection_type,
-    )
-
-    if edges_df.empty:
-        message = _format_connection_empty_message(connection_type)
-        return {
-            "url": None,
-            "height": _determine_network_height(len(nodes_df)),
-            "is_empty": True,
-            "message": message,
-        }
-
-    try:
-        import graphistry
-        
-        # Use personal key credentials if provided, otherwise fall back to default
-        if personal_key_id and personal_key_secret:
-            graphistry.register(
-                api=3,
-                protocol="https",
-                server="hub.graphistry.com",
-                personal_key_id=personal_key_id,
-                personal_key_secret=personal_key_secret
-            )
-        else:
-            graphistry.register(api=3, protocol="https", server="hub.graphistry.com")
-        
-        g = graphistry.edges(edges_df, "source", "target").nodes(nodes_df, "node_id")
-        
-        g = g.bind(
-            point_color="color",
-            point_size="size",
-            point_label="label",
-            point_title="tooltip",
-            edge_title="edge_tooltip",
-            edge_label="type"
+    edges = build_edges_by_connection_type(filtered_rules, connection_type)
+    
+    if not edges:
+        return _create_empty_figure(
+            _format_connection_empty_message(connection_type)
         )
-        
-        url = g.plot(render=False)
-        
-        height_px = _determine_network_height(len(nodes_df))
 
-        return {
-            "url": url,
-            "height": height_px,
-            "is_empty": False,
-            "message": "",
-        }
-    except Exception as e:
-        return {
-            "url": None,
-            "height": 600,
-            "is_empty": True,
-            "message": f"Graphistry initialization failed: {str(e)}. Please configure personal authentication credentials.",
-        }
+    G = _build_networkx_graph(filtered_rules, edges)
+    
+    pos = _compute_hierarchical_layout(G, layout_type)
+    
+    fig = _create_plotly_figure(G, pos, edges, filtered_rules, connection_type)
+    
+    return fig
 
 
-def _build_graphistry_dataframes(
+def _build_networkx_graph(
     rules: List[RuleData],
-    connection_type: str,
-) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    edges: List[Tuple[str, str, Dict[str, Any]]],
+) -> nx.DiGraph:
     """
-    Build pandas DataFrames for Graphistry nodes and edges.
+    Build a NetworkX directed graph from rules and edges.
     
     Args:
         rules: List of RuleData objects
-        connection_type: Relationship type to visualize
+        edges: List of (source, target, metadata) tuples
         
     Returns:
-        Tuple of (nodes_df, edges_df)
+        NetworkX DiGraph with nodes and edges
     """
-    nodes_data = []
-    edges_data = []
+    G = nx.DiGraph()
     
     nodes_metadata = build_node_metadata(rules)
     
     for rule_id, metadata in nodes_metadata.items():
-        nodes_data.append({
-            "node_id": rule_id,
-            "label": metadata["label"],
-            "color": _hex_to_rgb(metadata["color"]),
-            "size": metadata["size"],
-            "tooltip": metadata["title"],
-            "level": metadata["level"],
-            "severity": metadata["severity"],
-        })
+        G.add_node(
+            rule_id,
+            level=metadata["level"],
+            severity=metadata["severity"],
+            description=metadata["color"],
+            label=metadata["label"],
+            title=metadata["title"],
+        )
     
-    edges = build_edges_by_connection_type(rules, connection_type)
+    edge_colors = {
+        "if_sid": "#0099ff",
+        "if_matched_group": "#00cc00",
+        "if_group": "#ff9900",
+    }
     
     for source, target, edge_meta in edges:
-        if source in nodes_metadata and target in nodes_metadata:
-            edges_data.append({
-                "source": source,
-                "target": target,
-                "edge_tooltip": edge_meta.get("title", ""),
-                "type": edge_meta.get("type", ""),
-            })
+        relationship_type = edge_meta.get("type", "unknown")
+        color = edge_colors.get(relationship_type, "#999999")
+        
+        G.add_edge(
+            source,
+            target,
+            relationship_type=relationship_type,
+            title=edge_meta.get("title", ""),
+            color=color,
+        )
     
-    nodes_df = pd.DataFrame(nodes_data)
-    edges_df = pd.DataFrame(edges_data)
-    
-    return nodes_df, edges_df
+    return G
 
 
-def _hex_to_rgb(hex_color: str) -> int:
-    """Convert hex color to RGB integer for Graphistry."""
-    hex_color = hex_color.lstrip("#")
-    r = int(hex_color[0:2], 16)
-    g = int(hex_color[2:4], 16)
-    b = int(hex_color[4:6], 16)
-    return (r << 16) + (g << 8) + b
+def _compute_hierarchical_layout(
+    G: nx.DiGraph,
+    layout_type: str = "hierarchical",
+) -> Dict[str, Tuple[float, float]]:
+    """
+    Compute node positions using hierarchical or spring layout.
+    
+    Args:
+        G: NetworkX graph
+        layout_type: Type of layout ("hierarchical", "spring", "kamada_kawai")
+        
+    Returns:
+        Dictionary mapping node IDs to (x, y) positions
+    """
+    if layout_type == "hierarchical":
+        pos = _hierarchy_pos(G)
+    elif layout_type == "kamada_kawai":
+        pos = nx.kamada_kawai_layout(G, scale=1.0)
+    else:
+        pos = nx.spring_layout(G, k=2, iterations=50, seed=42)
+    
+    return pos
+
+
+def _hierarchy_pos(
+    G: nx.DiGraph,
+    root: Optional[str] = None,
+    width: float = 12.0,
+    vert_gap: float = 2.0,
+) -> Dict[str, Tuple[float, float]]:
+    """
+    Create hierarchical positions for tree-like layouts.
+    
+    Args:
+        G: NetworkX graph
+        root: Root node ID (if None, find all roots)
+        width: Width of the layout
+        vert_gap: Vertical gap between levels
+        
+    Returns:
+        Dictionary mapping node IDs to (x, y) positions
+    """
+    if root is None:
+        roots = [n for n in G.nodes() if G.in_degree(n) == 0]
+        if not roots:
+            roots = [list(G.nodes())[0]] if G.nodes() else []
+    else:
+        roots = [root]
+    
+    def _hierarchy_pos_recursive(
+        G: nx.DiGraph,
+        root: str,
+        leftmost: float,
+        width: float,
+        vert_gap: float,
+        pos: Dict[str, Tuple[float, float]],
+        xcenter: float,
+        rootpos: Optional[Tuple[float, float]] = None,
+    ) -> Tuple[float, Dict[str, Tuple[float, float]]]:
+        """Recursively calculate hierarchical positions."""
+        if rootpos is None:
+            rootpos = (xcenter, 0)
+        
+        pos[root] = rootpos
+        neighbors = list(G.neighbors(root))
+        
+        if not neighbors:
+            return leftmost + width, pos
+        
+        dx = width / len(neighbors)
+        nextx = leftmost
+        
+        for neighbor in neighbors:
+            nextx, pos = _hierarchy_pos_recursive(
+                G,
+                neighbor,
+                nextx,
+                dx,
+                vert_gap,
+                pos,
+                nextx + dx / 2,
+                (nextx + dx / 2, rootpos[1] - vert_gap),
+            )
+        
+        return nextx, pos
+    
+    pos = {}
+    xcenter = width / 2
+    
+    for root in roots:
+        _hierarchy_pos_recursive(
+            G,
+            root,
+            0,
+            width,
+            vert_gap,
+            pos,
+            xcenter,
+        )
+    
+    return pos
+
+
+def _create_plotly_figure(
+    G: nx.DiGraph,
+    pos: Dict[str, Tuple[float, float]],
+    edges: List[Tuple[str, str, Dict[str, Any]]],
+    rules: List[RuleData],
+    connection_type: str,
+) -> go.Figure:
+    """
+    Create a Plotly figure from NetworkX graph.
+    
+    Args:
+        G: NetworkX graph
+        pos: Node positions dictionary
+        edges: List of edges with metadata
+        rules: List of RuleData objects
+        connection_type: Type of connection being visualized
+        
+    Returns:
+        Plotly Figure object
+    """
+    nodes_metadata = build_node_metadata(rules)
+    
+    edge_traces = []
+    
+    for source, target, edge_meta in edges:
+        if source not in pos or target not in pos:
+            continue
+        
+        x0, y0 = pos[source]
+        x1, y1 = pos[target]
+        
+        relationship_type = edge_meta.get("type", "unknown")
+        
+        edge_color_map = {
+            "if_sid": "#0099ff",
+            "if_matched_group": "#00cc00",
+            "if_group": "#ff9900",
+        }
+        edge_color = edge_color_map.get(relationship_type, "#999999")
+        
+        edge_trace = go.Scatter(
+            x=[x0, x1, None],
+            y=[y0, y1, None],
+            mode="lines",
+            line=dict(width=2, color=edge_color),
+            hovertext=edge_meta.get("title", f"{source} → {target}"),
+            hoverinfo="text",
+            showlegend=False,
+            name="",
+        )
+        edge_traces.append(edge_trace)
+    
+    node_x = []
+    node_y = []
+    node_labels = []
+    node_colors = []
+    node_sizes = []
+    node_hovers = []
+    
+    for node in G.nodes():
+        if node in pos:
+            x, y = pos[node]
+            node_x.append(x)
+            node_y.append(y)
+            
+            metadata = nodes_metadata.get(node, {})
+            node_labels.append(metadata.get("label", node))
+            node_colors.append(metadata.get("color", "#808080"))
+            node_sizes.append(metadata.get("size", 20))
+            node_hovers.append(metadata.get("title", node))
+    
+    node_trace = go.Scatter(
+        x=node_x,
+        y=node_y,
+        mode="markers+text",
+        text=node_labels,
+        textposition="top center",
+        hovertext=node_hovers,
+        hoverinfo="text",
+        marker=dict(
+            size=node_sizes,
+            color=node_colors,
+            line=dict(width=2, color="white"),
+        ),
+        showlegend=False,
+        name="",
+    )
+    
+    fig = go.Figure(
+        data=edge_traces + [node_trace],
+        layout=go.Layout(
+            title=dict(
+                text=f"Wazuh Rule Relationships ({connection_type})",
+                x=0.5,
+                xanchor="center",
+            ),
+            showlegend=False,
+            hovermode="closest",
+            margin=dict(b=20, l=5, r=5, t=40),
+            xaxis=dict(
+                showgrid=False,
+                zeroline=False,
+                showticklabels=False,
+            ),
+            yaxis=dict(
+                showgrid=False,
+                zeroline=False,
+                showticklabels=False,
+            ),
+            plot_bgcolor="rgba(240, 240, 240, 0.5)",
+            height=max(600, len(G.nodes()) * 15),
+            dragmode="zoom",
+        ),
+    )
+    
+    return fig
+
+
+def _create_empty_figure(message: str) -> go.Figure:
+    """
+    Create an empty Plotly figure with a message.
+    
+    Args:
+        message: Message to display
+        
+    Returns:
+        Plotly Figure object with message
+    """
+    fig = go.Figure()
+    fig.add_annotation(
+        text=message,
+        xref="paper",
+        yref="paper",
+        x=0.5,
+        y=0.5,
+        showarrow=False,
+        font=dict(size=16, color="gray"),
+    )
+    fig.update_layout(
+        title="No Data to Display",
+        xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+        yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+        plot_bgcolor="rgba(240, 240, 240, 0.5)",
+        height=400,
+        margin=dict(b=20, l=5, r=5, t=40),
+    )
+    return fig
 
 
 def filter_rules_by_severity_and_groups(
@@ -244,8 +435,6 @@ def build_edges_by_connection_type(
     Returns:
         List of (source_id, target_id, edge_metadata) tuples
     """
-    from collections import defaultdict
-    
     edges = []
     rule_lookup = {rule.rule_id: rule for rule in rules}
     
@@ -330,8 +519,6 @@ def build_node_metadata(
         - severity: Severity classification
         - groups: List of groups
     """
-    from html import escape
-    
     nodes = {}
     
     for rule in rules:
@@ -360,52 +547,6 @@ Filters: {filter_summary}"""
     return nodes
 
 
-def create_interactive_network(
-    rules: List[RuleData],
-    connection_type: str = "if_sid",
-    min_level: int = 0,
-    max_level: int = 15,
-    groups_filter: Optional[List[str]] = None,
-    height: str = "600px",
-    width: str = "100%",
-    physics_enabled: bool = True,
-    personal_key_id: Optional[str] = None,
-    personal_key_secret: Optional[str] = None,
-) -> str:
-    """
-    Create an interactive Graphistry network visualization.
-    
-    Args:
-        rules: List of RuleData objects to visualize
-        connection_type: "if_sid", "if_matched_group", or "if_group"
-        min_level: Minimum severity level to include
-        max_level: Maximum severity level to include
-        groups_filter: Optional list of groups to filter by
-        height: Network height (CSS string, e.g., "600px")
-        width: Network width (CSS string, e.g., "100%")
-        physics_enabled: Whether to enable physics simulation (kept for compatibility)
-        personal_key_id: Optional Graphistry personal key ID for authentication
-        personal_key_secret: Optional Graphistry personal key secret for authentication
-    
-    Returns:
-        HTML string containing the interactive network
-    """
-    result = create_node_link_diagram(
-        rules=rules,
-        min_level=min_level,
-        layout_type="hierarchical",
-        connection_type=connection_type,
-        selected_groups=groups_filter,
-        personal_key_id=personal_key_id,
-        personal_key_secret=personal_key_secret,
-    )
-    
-    if result.get("is_empty"):
-        return result
-    
-    return result
-
-
 def _filter_rules_by_severity_and_groups(
     rules: List[RuleData],
     min_level: int = 0,
@@ -427,9 +568,3 @@ def _format_connection_empty_message(connection_type: str) -> str:
     elif connection_type == "if_group":
         return "No rules with if_group connections found"
     return "No rules with if_sid parent relationships found"
-
-
-def _determine_network_height(node_count: int) -> int:
-    """Determine network height based on node count."""
-    base_height = 600
-    return min(base_height + (node_count * 10), 1200)
