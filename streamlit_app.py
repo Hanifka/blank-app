@@ -2,8 +2,8 @@ import streamlit as st
 import os
 from typing import List, Optional
 from wazuh_parser import parse_wazuh_xml, RuleData, rule_to_dict, summarize_filter_logic, generate_debug_log
-# from visualizations.flowchart import create_rule_network_visualization  # Temporarily disabled
-# import plotly.graph_objects as go  # Temporarily disabled
+from visualizations.flowchart import create_rule_network_visualization
+import plotly.graph_objects as go
 
 st.set_page_config(
     page_title="Wazuh Rule Visualizer",
@@ -71,36 +71,7 @@ def get_severity_color(level: int) -> str:
 def render_instructions():
     """Render the instruction and context section."""
     st.title("🛡️ Wazuh Rule Visualizer")
-    
-    with st.expander("📖 About Wazuh Rules", expanded=False):
-        st.markdown("""
-        ### What are Wazuh Rules?
-        
-        Wazuh is an open-source security monitoring platform that uses **XML-based rules** to detect 
-        security threats, compliance violations, and system anomalies. Each rule defines:
-        
-        - **Detection Logic**: Pattern matching, frequency analysis, and field-based conditions
-        - **Severity Levels**: From 0 (ignored) to 15 (critical)
-        - **Metadata**: MITRE ATT&CK techniques, CIS/NIST controls, rule groups
-        - **Rule Hierarchy**: Parent-child relationships via `if_sid` references
-        
-        ### How to Use This Tool
-        
-        1. **Upload** your Wazuh XML rule file using the file uploader
-        2. **Preview** the parsed rules, metadata, and detection logic
-        3. **Analyze** rule distribution by severity, groups, and compliance frameworks
-        4. **Prepare** for simulation and visualization features (coming soon!)
-        
-        ### Severity Level Guide
-        
-        | Level | Classification | Description |
-        |-------|---------------|-------------|
-        | 0 | Ignored | No alert generated |
-        | 1-3 | Low | Informational events |
-        | 4-6 | Medium | Notable events requiring attention |
-        | 7-9 | High | Important security events |
-        | 10-15 | Critical | Critical threats requiring immediate action |
-        """)
+    st.markdown("Simple visualization of Wazuh XML security rules with interactive network graphs showing rule relationships.")
 
 
 def render_file_upload():
@@ -245,35 +216,30 @@ def render_metadata_summary(rules: List[RuleData], warnings: List[str]):
 
 
 def render_flowchart_visualization(rules: List[RuleData]):
-    """Render simplified visualization placeholder."""
+    """Render network visualization with connection type selector."""
     if not rules:
         return
     
     st.subheader("📊 Rule Relationship Network")
     
-    st.info("🔄 **Network visualization temporarily disabled** - The interactive network graph will be available again in the next update.")
+    # Connection type selector
+    connection_type = st.radio(
+        "Select connection type to visualize:",
+        options=["if_sid", "if_matched_group", "if_group"],
+        format_func=lambda x: {
+            "if_sid": "🔗 Parent Rules (if_sid)",
+            "if_matched_group": "🔀 Group Correlations (if_matched_group)",
+            "if_group": "📦 Group Rules (if_group)"
+        }[x],
+        horizontal=True
+    )
     
-    # Show basic relationship statistics instead
-    st.markdown("**Available Relationships:**")
-    
-    # Count different relationship types
-    if_sid_count = sum(1 for r in rules if r.detection_cues.if_sid)
-    if_matched_group_count = sum(1 for r in rules if r.detection_cues.if_matched_groups)
-    if_group_count = sum(1 for r in rules if r.detection_cues.if_groups)
-    
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric("Parent Rules (if_sid)", if_sid_count)
-    with col2:
-        st.metric("Group Correlations (if_matched_group)", if_matched_group_count)
-    with col3:
-        st.metric("Group Rules (if_group)", if_group_count)
-    
-    st.markdown("---")
-    st.markdown("**Next Steps:**")
-    st.markdown("• The network visualization will be restored once dependencies are resolved")
-    st.markdown("• Use the **Rule Details** section below to explore individual rules")
-    st.markdown("• Check the **XML Extraction Debug Log** to verify parsing accuracy")
+    # Generate visualization
+    try:
+        fig = create_rule_network_visualization(rules, connection_type=connection_type)
+        st.plotly_chart(fig, use_container_width=True)
+    except Exception as e:
+        st.error(f"❌ Error creating visualization: {str(e)}")
 
 
 def render_debug_extraction_log(rules: List[RuleData]):
@@ -444,36 +410,20 @@ def main():
         st.markdown("""
         **Wazuh Rule Visualizer**
         
-        Version: 1.1.0
-        
-        Copyright © 2025 Hanifka  
-        Licensed under the Apache License, Version 2.0. See the LICENSE file for details.  
-        **Owner:** Hanifka
-        
-        This tool parses and visualizes Wazuh XML security rules, helping analysts understand 
-        detection logic, severity levels, and compliance mappings.
+        Simple visualization of Wazuh XML security rules with network relationships.
         
         **Features:**
-        - 📁 XML file upload with validation
-        - 📝 Direct XML paste input
-        - 📊 Rule statistics and metrics
-        - 🔄 Network visualization (temporarily disabled)
-        - 🔍 Search and filter capabilities
-        - 🎯 MITRE ATT&CK integration
-        - 🔄 Cached parsing for performance
-        
-        **Coming Soon:**
-        - 🎮 Rule simulation engine
-        - 📤 Export capabilities
+        - 📁 XML file upload
+        - 🔗 Network visualization with 3 connection types
+        - 🐛 XML extraction debug log
+        - 📊 Rule statistics
+        - 🔍 Rule search and filtering
         """)
         
         if st.session_state.rules:
             st.divider()
-            st.subheader("🔧 Debug Info")
-            st.caption(f"Rules in memory: {len(st.session_state.rules)}")
-            st.caption(f"Warnings: {len(st.session_state.warnings or [])}")
-            if st.session_state.xml_content:
-                st.caption(f"XML size: {len(st.session_state.xml_content)} bytes")
+            st.caption(f"📦 Rules: {len(st.session_state.rules)}")
+            st.caption(f"⚠️ Warnings: {len(st.session_state.warnings or [])}")
 
 
 if __name__ == "__main__":
