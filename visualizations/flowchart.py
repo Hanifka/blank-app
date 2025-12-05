@@ -151,11 +151,12 @@ def _compute_hierarchical_layout(
         Dictionary mapping node IDs to (x, y) positions
     """
     if layout_type == "hierarchical":
-        pos = _hierarchy_pos(G)
+        # Use spring layout instead of hierarchical for better spacing
+        pos = nx.spring_layout(G, k=3, iterations=100, seed=42, scale=1000)
     elif layout_type == "kamada_kawai":
         pos = nx.kamada_kawai_layout(G, scale=1.0)
     else:
-        pos = nx.spring_layout(G, k=2, iterations=50, seed=42)
+        pos = nx.spring_layout(G, k=3, iterations=100, seed=42, scale=1000)
     
     return pos
 
@@ -283,7 +284,7 @@ def _create_plotly_figure(
             x=[x0, x1, None],
             y=[y0, y1, None],
             mode="lines",
-            line=dict(width=2, color=edge_color),
+            line=dict(width=3, color=edge_color),
             hovertext=edge_meta.get("title", f"{source} → {target}"),
             hoverinfo="text",
             showlegend=False,
@@ -337,7 +338,7 @@ def _create_plotly_figure(
             ),
             showlegend=False,
             hovermode="closest",
-            margin=dict(b=20, l=5, r=5, t=40),
+            margin=dict(b=0, l=0, r=0, t=40),
             xaxis=dict(
                 showgrid=False,
                 zeroline=False,
@@ -348,8 +349,10 @@ def _create_plotly_figure(
                 zeroline=False,
                 showticklabels=False,
             ),
-            plot_bgcolor="rgba(240, 240, 240, 0.5)",
-            height=max(600, len(G.nodes()) * 15),
+            plot_bgcolor='#1a1a1a',
+            paper_bgcolor='#1a1a1a',
+            font=dict(color='white'),
+            height=700,
             dragmode="zoom",
         ),
     )
@@ -375,15 +378,17 @@ def _create_empty_figure(message: str) -> go.Figure:
         x=0.5,
         y=0.5,
         showarrow=False,
-        font=dict(size=16, color="gray"),
+        font=dict(size=16, color="white"),
     )
     fig.update_layout(
         title="No Data to Display",
         xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
         yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
-        plot_bgcolor="rgba(240, 240, 240, 0.5)",
+        plot_bgcolor='#1a1a1a',
+        paper_bgcolor='#1a1a1a',
+        font=dict(color='white'),
         height=400,
-        margin=dict(b=20, l=5, r=5, t=40),
+        margin=dict(b=0, l=0, r=0, t=40),
     )
     return fig
 
@@ -538,7 +543,7 @@ Filters: {filter_summary}"""
             "label": f"Rule {rule.rule_id}",
             "color": color,
             "title": title_html.strip(),
-            "size": 20 + (rule.level * 2),
+            "size": 25 + (rule.level * 3),  # Increased base size and multiplier
             "level": rule.level,
             "severity": severity,
             "groups": rule.groups,
