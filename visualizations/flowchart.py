@@ -132,7 +132,7 @@ def create_rule_network_visualization(
         textposition='top center',
         textfont=dict(
             size=12,
-            color='white'
+            color='black'
         ),
         hovertext=node_text,
         hoverinfo='text',
