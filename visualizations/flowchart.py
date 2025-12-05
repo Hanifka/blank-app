@@ -130,6 +130,10 @@ def create_rule_network_visualization(
         mode='markers+text',
         text=[str(n) for n in G.nodes()],
         textposition='top center',
+        textfont=dict(
+            size=12,
+            color='white'
+        ),
         hovertext=node_text,
         hoverinfo='text',
         marker=dict(
