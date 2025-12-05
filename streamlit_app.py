@@ -2,7 +2,7 @@ import streamlit as st
 import os
 from typing import List, Optional
 from wazuh_parser import parse_wazuh_xml, RuleData, rule_to_dict, summarize_filter_logic, generate_debug_log
-from visualizations.flowchart import create_node_link_diagram
+from visualizations.flowchart import create_rule_network_visualization
 import plotly.graph_objects as go
 
 st.set_page_config(
@@ -265,17 +265,7 @@ def render_flowchart_visualization(rules: List[RuleData]):
             help="Choose which relationship type to visualize"
         )
     
-    with col2:
-        layout_type = st.selectbox(
-            "Layout Type",
-            options=["hierarchical", "spring", "kamada_kawai"],
-            format_func=lambda x: {
-                "hierarchical": "Hierarchical",
-                "spring": "Spring",
-                "kamada_kawai": "Kamada-Kawai"
-            }[x],
-            help="Choose the layout algorithm for node positioning"
-        )
+    col2.empty()
     
     min_severity = st.select_slider(
         "Min Severity",
@@ -294,11 +284,10 @@ def render_flowchart_visualization(rules: List[RuleData]):
         )
     
     try:
-        fig = create_node_link_diagram(
+        fig = create_rule_network_visualization(
             rules,
-            min_level=min_severity,
-            layout_type=layout_type,
             connection_type=connection_type,
+            min_level=min_severity,
             selected_groups=selected_groups if selected_groups else None,
         )
         st.plotly_chart(fig, use_container_width=True)
