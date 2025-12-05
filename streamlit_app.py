@@ -2,8 +2,8 @@ import streamlit as st
 import os
 from typing import List, Optional
 from wazuh_parser import parse_wazuh_xml, RuleData, rule_to_dict, summarize_filter_logic, generate_debug_log
-from visualizations.flowchart import create_rule_network_visualization
-import plotly.graph_objects as go
+# from visualizations.flowchart import create_rule_network_visualization  # Temporarily disabled
+# import plotly.graph_objects as go  # Temporarily disabled
 
 st.set_page_config(
     page_title="Wazuh Rule Visualizer",
@@ -245,54 +245,35 @@ def render_metadata_summary(rules: List[RuleData], warnings: List[str]):
 
 
 def render_flowchart_visualization(rules: List[RuleData]):
-    """Render interactive NetworkX + Plotly network visualization."""
+    """Render simplified visualization placeholder."""
     if not rules:
         return
     
     st.subheader("📊 Rule Relationship Network")
     
-    col1, col2 = st.columns([2, 1])
+    st.info("🔄 **Network visualization temporarily disabled** - The interactive network graph will be available again in the next update.")
     
+    # Show basic relationship statistics instead
+    st.markdown("**Available Relationships:**")
+    
+    # Count different relationship types
+    if_sid_count = sum(1 for r in rules if r.detection_cues.if_sid)
+    if_matched_group_count = sum(1 for r in rules if r.detection_cues.if_matched_groups)
+    if_group_count = sum(1 for r in rules if r.detection_cues.if_groups)
+    
+    col1, col2, col3 = st.columns(3)
     with col1:
-        connection_type = st.selectbox(
-            "Connection Type",
-            options=["if_sid", "if_matched_group", "if_group"],
-            format_func=lambda x: {
-                "if_sid": "Parent Chain (if_sid)",
-                "if_matched_group": "Group Correlation (if_matched_group)",
-                "if_group": "Group Correlation (if_group)"
-            }[x],
-            help="Choose which relationship type to visualize"
-        )
+        st.metric("Parent Rules (if_sid)", if_sid_count)
+    with col2:
+        st.metric("Group Correlations (if_matched_group)", if_matched_group_count)
+    with col3:
+        st.metric("Group Rules (if_group)", if_group_count)
     
-    col2.empty()
-    
-    min_severity = st.select_slider(
-        "Min Severity",
-        options=list(range(0, 16)),
-        value=0,
-        help="Filter rules by minimum severity level"
-    )
-    
-    all_groups = sorted({g for rule in rules for g in rule.groups if g})
-    selected_groups = None
-    if all_groups:
-        selected_groups = st.multiselect(
-            "Filter by group (optional)",
-            options=all_groups,
-            help="Limit the network to specific rule groups"
-        )
-    
-    try:
-        fig = create_rule_network_visualization(
-            rules,
-            connection_type=connection_type,
-            min_level=min_severity,
-            selected_groups=selected_groups if selected_groups else None,
-        )
-        st.plotly_chart(fig, use_container_width=True)
-    except Exception as e:
-        st.error(f"❌ Error rendering visualization: {str(e)}")
+    st.markdown("---")
+    st.markdown("**Next Steps:**")
+    st.markdown("• The network visualization will be restored once dependencies are resolved")
+    st.markdown("• Use the **Rule Details** section below to explore individual rules")
+    st.markdown("• Check the **XML Extraction Debug Log** to verify parsing accuracy")
 
 
 def render_debug_extraction_log(rules: List[RuleData]):
@@ -476,7 +457,7 @@ def main():
         - 📁 XML file upload with validation
         - 📝 Direct XML paste input
         - 📊 Rule statistics and metrics
-        - 📈 Interactive Graphistry network visualizations
+        - 🔄 Network visualization (temporarily disabled)
         - 🔍 Search and filter capabilities
         - 🎯 MITRE ATT&CK integration
         - 🔄 Cached parsing for performance
