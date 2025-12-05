@@ -1,6 +1,8 @@
 import streamlit as st
 import os
-from typing import List
+import xml.etree.ElementTree as ET
+from typing import List, Dict, Optional
+from xml.dom import minidom
 from wazuh_parser import parse_wazuh_xml, RuleData, summarize_filter_logic
 from visualizations.flowchart import create_rule_network_visualization
 
@@ -28,6 +30,48 @@ def load_sysmon_sample() -> str:
         with open(sysmon_path, "r", encoding="utf-8") as f:
             return f.read()
     return ""
+
+
+def extract_raw_rule_xml(xml_content: str) -> Dict[int, str]:
+    """
+    Extract the raw XML string for each rule from the original XML content.
+    
+    Args:
+        xml_content: Original XML content string
+        
+    Returns:
+        Dictionary mapping rule_id -> raw_xml_string
+    """
+    rule_xml_map = {}
+    
+    try:
+        root = ET.fromstring(xml_content)
+        rule_elements = root.findall(".//rule")
+        
+        for rule_elem in rule_elements:
+            rule_id_str = rule_elem.get("id")
+            if rule_id_str:
+                try:
+                    rule_id = int(rule_id_str)
+                    xml_string = ET.tostring(rule_elem, encoding='unicode')
+                    
+                    try:
+                        dom = minidom.parseString(xml_string)
+                        pretty_xml = dom.toprettyxml(indent="  ")
+                        lines = [line for line in pretty_xml.split('\n') if line.strip()]
+                        if lines and lines[0].startswith('<?xml'):
+                            lines = lines[1:]
+                        rule_xml_map[rule_id] = '\n'.join(lines)
+                    except:
+                        rule_xml_map[rule_id] = xml_string
+                        
+                except (ValueError, Exception):
+                    continue
+                    
+    except Exception:
+        pass
+    
+    return rule_xml_map
 
 
 @st.cache_data
@@ -280,13 +324,14 @@ def render_flowchart_visualization(rules: List[RuleData], connection_type: str):
 
 
 
-def render_rule_details(rules: List[RuleData]):
+def render_rule_details(rules: List[RuleData], rule_xml_map: Optional[Dict[int, str]] = None):
     """Render detailed rule information in tabular/accordion format."""
     if not rules:
         st.info("No rules match the current filters.")
         return
     
-    st.subheader("🔍 Rule Details")
+    st.subheader("🔍 Rule Details & XML")
+    st.caption("Expand a rule to inspect metadata and view its original XML definition.")
     
     search_query = st.text_input(
         "🔎 Search rules",
@@ -327,9 +372,15 @@ def render_rule_details(rules: List[RuleData]):
         severity = get_severity_level(rule.level)
         color = get_severity_color(rule.level)
         
-        header = f"**Rule {rule.rule_id}** • Level {rule.level} ({severity})"
+        desc_preview = (rule.description or "").strip()
+        if len(desc_preview) > 80:
+            desc_preview = desc_preview[:80].rstrip() + "…"
         
-        with st.expander(header):
+        header_text = f"Rule {rule.rule_id} - Level {rule.level} ({severity})"
+        if desc_preview:
+            header_text = f"{header_text} • {desc_preview}"
+        
+        with st.expander(header_text):
             col1, col2 = st.columns([2, 1])
             
             with col1:
@@ -369,6 +420,15 @@ def render_rule_details(rules: List[RuleData]):
                     st.markdown("**NIST Controls:**")
                     for control in rule.nist_controls:
                         st.markdown(f"• {control}")
+            
+            if rule_xml_map and rule.rule_id in rule_xml_map:
+                st.divider()
+                st.markdown("**📄 Full XML Definition:**")
+                st.code(rule_xml_map[rule.rule_id], language='xml')
+            elif rule_xml_map is not None:
+                st.divider()
+                st.markdown("**📄 Full XML Definition:**")
+                st.info("Original XML content not available for this rule.")
 
 
 def main():
@@ -379,6 +439,8 @@ def main():
         st.session_state.warnings = None
     if "xml_content" not in st.session_state:
         st.session_state.xml_content = None
+    if "rule_xml_map" not in st.session_state:
+        st.session_state.rule_xml_map = {}
     if "show_paste_input" not in st.session_state:
         st.session_state.show_paste_input = False
     
@@ -394,11 +456,13 @@ def main():
             st.session_state.rules = rules
             st.session_state.warnings = warnings
             st.session_state.xml_content = xml_content
+            st.session_state.rule_xml_map = extract_raw_rule_xml(xml_content)
         except Exception as e:
             st.error(f"❌ **Parsing Error:** {str(e)}")
             st.session_state.rules = None
             st.session_state.warnings = None
             st.session_state.xml_content = None
+            st.session_state.rule_xml_map = {}
     
     st.divider()
     
@@ -419,7 +483,7 @@ def main():
         
         st.divider()
         
-        render_rule_details(filtered_rules)
+        render_rule_details(filtered_rules, st.session_state.rule_xml_map)
     else:
         st.info("👆 Upload a Wazuh XML file, load the sample, or paste rules to get started")
     
@@ -436,6 +500,7 @@ def main():
         - 🔧 Rule level and ID filters
         - 📊 Rule statistics
         - 🔍 Rule search and filtering
+        - 📄 View full XML for each rule
         """)
         
         if st.session_state.rules:
