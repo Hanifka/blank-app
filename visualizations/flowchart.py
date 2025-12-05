@@ -116,8 +116,10 @@ def create_node_link_diagram(
         g = g.bind(
             point_color="color",
             point_size="size",
+            point_label="label",
             point_title="tooltip",
-            edge_title="edge_tooltip"
+            edge_title="edge_tooltip",
+            edge_label="type"
         )
         
         url = g.plot(render=False)
