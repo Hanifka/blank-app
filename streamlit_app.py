@@ -1,9 +1,8 @@
 import streamlit as st
 import os
-from typing import List, Optional
-from wazuh_parser import parse_wazuh_xml, RuleData, rule_to_dict, summarize_filter_logic, generate_debug_log
+from typing import List
+from wazuh_parser import parse_wazuh_xml, RuleData, summarize_filter_logic
 from visualizations.flowchart import create_rule_network_visualization
-import plotly.graph_objects as go
 
 st.set_page_config(
     page_title="Wazuh Rule Visualizer",
@@ -215,26 +214,64 @@ def render_metadata_summary(rules: List[RuleData], warnings: List[str]):
             st.markdown(f"_...and {len(all_groups) - 10} more_")
 
 
-def render_flowchart_visualization(rules: List[RuleData]):
-    """Render network visualization with connection type selector."""
-    if not rules:
-        return
-    
-    st.subheader("📊 Rule Relationship Network")
-    
-    # Connection type selector
-    connection_type = st.radio(
-        "Select connection type to visualize:",
+def render_connection_type_selector() -> str:
+    """Render the connection type selector for the visualization."""
+    st.subheader("Connection Type")
+    return st.radio(
+        "Connection Type",
         options=["if_sid", "if_matched_group", "if_group"],
         format_func=lambda x: {
             "if_sid": "🔗 Parent Rules (if_sid)",
             "if_matched_group": "🔀 Group Correlations (if_matched_group)",
             "if_group": "📦 Group Rules (if_group)"
         }[x],
-        horizontal=True
+        horizontal=True,
+        label_visibility="collapsed",
+        help="Choose which rule relationships to visualize"
     )
+
+
+def render_rule_filters(rules: List[RuleData]) -> List[RuleData]:
+    """Render global rule filters and return the filtered rule set."""
+    if not rules:
+        return []
     
-    # Generate visualization
+    st.subheader("Filters")
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        min_level = st.slider(
+            "Min Rule Level",
+            min_value=0,
+            max_value=15,
+            value=0,
+            help="Only show rules with level greater than or equal to the selected minimum"
+        )
+    
+    with col2:
+        search_rule_id = st.text_input(
+            "Search Rule ID",
+            value="",
+            placeholder="e.g., 102101, 100002",
+            help="Filter and highlight specific rules by their ID"
+        )
+    
+    filtered_rules = [r for r in rules if r.level >= min_level]
+    if search_rule_id:
+        filtered_rules = [r for r in filtered_rules if search_rule_id in str(r.rule_id)]
+    
+    st.caption(f"Showing {len(filtered_rules)} of {len(rules)} rules")
+    return filtered_rules
+
+
+def render_flowchart_visualization(rules: List[RuleData], connection_type: str):
+    """Render network visualization for the filtered rules."""
+    st.subheader("📊 Rule Relationship Network")
+    
+    if not rules:
+        st.info("No rules match the current filters.")
+        return
+    
     try:
         fig = create_rule_network_visualization(rules, connection_type=connection_type)
         st.plotly_chart(fig, use_container_width=True)
@@ -242,34 +279,11 @@ def render_flowchart_visualization(rules: List[RuleData]):
         st.error(f"❌ Error creating visualization: {str(e)}")
 
 
-def render_debug_extraction_log(rules: List[RuleData]):
-    """Render comprehensive debug log of all extracted values from XML."""
-    if not rules:
-        return
-    
-    st.subheader("🐛 XML Extraction Debug Log")
-    st.caption("Complete list of all extracted values for verification")
-    
-    debug_log = generate_debug_log(rules)
-    
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        st.text_area(
-            "Debug Log (copyable)",
-            value=debug_log,
-            height=400,
-            disabled=True,
-            help="Copy this entire log to verify parser accuracy"
-        )
-    with col2:
-        st.write("")
-        if st.button("📋 Copy All", use_container_width=True, help="Copy entire debug log to clipboard"):
-            st.toast("📋 Debug log copied to clipboard!", icon="✅")
-
 
 def render_rule_details(rules: List[RuleData]):
     """Render detailed rule information in tabular/accordion format."""
     if not rules:
+        st.info("No rules match the current filters.")
         return
     
     st.subheader("🔍 Rule Details")
@@ -393,15 +407,19 @@ def main():
         
         st.divider()
         
-        render_debug_extraction_log(st.session_state.rules)
+        connection_type = render_connection_type_selector()
         
         st.divider()
         
-        render_flowchart_visualization(st.session_state.rules)
+        filtered_rules = render_rule_filters(st.session_state.rules)
         
         st.divider()
         
-        render_rule_details(st.session_state.rules)
+        render_flowchart_visualization(filtered_rules, connection_type)
+        
+        st.divider()
+        
+        render_rule_details(filtered_rules)
     else:
         st.info("👆 Upload a Wazuh XML file, load the sample, or paste rules to get started")
     
@@ -415,7 +433,7 @@ def main():
         **Features:**
         - 📁 XML file upload
         - 🔗 Network visualization with 3 connection types
-        - 🐛 XML extraction debug log
+        - 🔧 Rule level and ID filters
         - 📊 Rule statistics
         - 🔍 Rule search and filtering
         """)
