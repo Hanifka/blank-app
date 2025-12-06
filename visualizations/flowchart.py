@@ -16,11 +16,11 @@ from wazuh_parser import RuleData
 def get_severity_color(level: int) -> str:
     """Return color code for severity level."""
     if level >= 10:
-        return "red"
+        return '#8B0000'  # Dark red for critical
     elif level >= 5:
-        return "orange"
+        return '#CC6600'  # Dark orange for medium
     else:
-        return "green"
+        return '#2D5016'  # Dark green for low
 
 
 def create_rule_network_visualization(
@@ -132,7 +132,7 @@ def create_rule_network_visualization(
         textposition='top center',
         textfont=dict(
             size=12,
-            color='white'
+            color='black'
         ),
         hovertext=node_text,
         hoverinfo='text',
