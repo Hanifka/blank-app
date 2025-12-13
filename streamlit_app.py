@@ -16,6 +16,143 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+import streamlit as st
+import streamlit.components.v1 as components
+
+def inject_futuristic_background():
+    # 1) Style Streamlit main page to be transparent, and pin ONLY our background iframe
+    st.markdown(
+        """
+        <style>
+          /* Make the app background transparent so the background iframe can be seen */
+          .stApp, [data-testid="stAppViewContainer"], [data-testid="stHeader"] {
+            background: transparent !important;
+          }
+
+          /* Target ONLY the iframe that contains our marker string */
+          iframe[srcdoc*="WAZUH_FUTURE_BG_MARKER"] {
+            position: fixed !important;
+            inset: 0 !important;
+            width: 100vw !important;
+            height: 100vh !important;
+            z-index: -1 !important;  /* behind Streamlit UI */
+            border: 0 !important;
+          }
+
+          /* Optional: make sidebar a bit glassy */
+          [data-testid="stSidebar"] {
+            background: rgba(0,0,0,0.35) !important;
+            backdrop-filter: blur(8px);
+          }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    # 2) The animated canvas lives inside the iframe, but the iframe is pinned to the page background
+    components.html(
+        """
+        <!doctype html>
+        <html>
+        <head>
+          <meta charset="utf-8"/>
+          <style>
+            html, body { margin:0; padding:0; width:100%; height:100%; overflow:hidden; background:#000; }
+            canvas { display:block; width:100%; height:100%; }
+          </style>
+        </head>
+        <body>
+          <!-- WAZUH_FUTURE_BG_MARKER -->
+          <canvas id="bg"></canvas>
+          <script>
+            const canvas = document.getElementById("bg");
+            const ctx = canvas.getContext("2d");
+
+            function resize(){
+              const dpr = window.devicePixelRatio || 1;
+              canvas.width = Math.floor(innerWidth * dpr);
+              canvas.height = Math.floor(innerHeight * dpr);
+              ctx.setTransform(dpr,0,0,dpr,0,0);
+            }
+            addEventListener("resize", resize);
+            resize();
+
+            const N = 110;
+            const LINK = 150;
+            const SPEED = 0.6;
+
+            const pts = Array.from({length:N}, () => ({
+              x: Math.random() * innerWidth,
+              y: Math.random() * innerHeight,
+              vx: (Math.random()-0.5) * SPEED,
+              vy: (Math.random()-0.5) * SPEED,
+              r: 1 + Math.random()*1.6
+            }));
+
+            function bg(){
+              const g = ctx.createRadialGradient(innerWidth*0.25, innerHeight*0.2, 60,
+                                                 innerWidth*0.25, innerHeight*0.2, Math.max(innerWidth, innerHeight));
+              g.addColorStop(0, "rgba(0,255,210,0.10)");
+              g.addColorStop(0.4, "rgba(0,90,170,0.08)");
+              g.addColorStop(1, "rgba(0,0,0,0.98)");
+              ctx.fillStyle = g;
+              ctx.fillRect(0,0,innerWidth,innerHeight);
+
+              // faint grid
+              ctx.globalAlpha = 0.12;
+              ctx.strokeStyle = "rgba(0,255,210,0.25)";
+              const step = 70;
+              for(let x=0;x<innerWidth;x+=step){ ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,innerHeight); ctx.stroke(); }
+              for(let y=0;y<innerHeight;y+=step){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(innerWidth,y); ctx.stroke(); }
+              ctx.globalAlpha = 1;
+            }
+
+            function tick(){
+              ctx.clearRect(0,0,innerWidth,innerHeight);
+              bg();
+
+              for(const p of pts){
+                p.x += p.vx; p.y += p.vy;
+                if(p.x < 0) p.x = innerWidth;
+                if(p.x > innerWidth) p.x = 0;
+                if(p.y < 0) p.y = innerHeight;
+                if(p.y > innerHeight) p.y = 0;
+              }
+
+              for(let i=0;i<N;i++){
+                for(let j=i+1;j<N;j++){
+                  const a=pts[i], b=pts[j];
+                  const dx=a.x-b.x, dy=a.y-b.y;
+                  const d=Math.hypot(dx,dy);
+                  if(d < LINK){
+                    const alpha = (1 - d/LINK) * 0.30;
+                    ctx.strokeStyle = `rgba(0,255,220,${alpha})`;
+                    ctx.lineWidth = 1;
+                    ctx.beginPath();
+                    ctx.moveTo(a.x,a.y);
+                    ctx.lineTo(b.x,b.y);
+                    ctx.stroke();
+                  }
+                }
+              }
+
+              for(const p of pts){
+                ctx.fillStyle = "rgba(255,255,255,0.85)";
+                ctx.beginPath();
+                ctx.arc(p.x,p.y,p.r,0,Math.PI*2);
+                ctx.fill();
+              }
+
+              requestAnimationFrame(tick);
+            }
+            tick();
+          </script>
+        </body>
+        </html>
+        """,
+        height=0,
+        width=0,
+    )
 
 def inject_futuristic_background():
     """Fullscreen futuristic animated background (canvas particles + links)."""
