@@ -73,6 +73,16 @@ def create_rule_network_visualization(
             if parent_id and parent_id in filtered_rule_ids:
                 G.add_edge(parent_id, rule.rule_id, color="blue")
 
+        elif connection_type == "if_matched_sid":
+            parent_id = getattr(cues, "if_matched_sid", None) if cues else None
+            if parent_id and parent_id in filtered_rule_ids:
+                frequency = getattr(rule, "frequency", None)
+                timeframe = getattr(rule, "timeframe", None)
+                label = ""
+                if frequency and timeframe:
+                    label = f"{frequency}x/{timeframe}s"
+                G.add_edge(parent_id, rule.rule_id, color="yellow", label=label, frequency=frequency, timeframe=timeframe)
+
         elif connection_type == "if_matched_group":
             matched_groups = getattr(cues, "if_matched_groups", None) if cues else None
             if matched_groups and group_to_rules:
@@ -99,12 +109,19 @@ def create_rule_network_visualization(
 
     # ---- Edges (lines) ----
     edge_traces = []
-    edges_for_arrows = []  # (x0,y0,x1,y1,color)
+    edges_for_arrows = []  # (x0,y0,x1,y1,color,label)
 
     for (source, target, data) in G.edges(data=True):
         x0, y0 = pos[source]
         x1, y1 = pos[target]
         color = data.get("color", "gray")
+        label = data.get("label", "")
+        frequency = data.get("frequency", None)
+        timeframe = data.get("timeframe", None)
+        
+        hover_text = f"Rule {source} → Rule {target}"
+        if frequency and timeframe:
+            hover_text += f"<br>{frequency} times in {timeframe}s"
 
         edge_traces.append(
             go.Scatter(
@@ -112,11 +129,12 @@ def create_rule_network_visualization(
                 y=[y0, y1, None],
                 mode="lines",
                 line=dict(width=2, color=color),
-                hoverinfo="none",
+                hovertext=hover_text,
+                hoverinfo="text",
                 showlegend=False,
             )
         )
-        edges_for_arrows.append((x0, y0, x1, y1, color))
+        edges_for_arrows.append((x0, y0, x1, y1, color, label))
 
     # ---- Nodes ----
     node_x, node_y, node_text, node_color = [], [], [], []
@@ -172,7 +190,7 @@ def create_rule_network_visualization(
 
     # ---- Arrowheads (vector direction) ----
     # Put arrowhead near the target, not inside the node marker
-    for (x0, y0, x1, y1, color) in edges_for_arrows:
+    for (x0, y0, x1, y1, color, label) in edges_for_arrows:
         xa = x0 + 0.90 * (x1 - x0)
         ya = y0 + 0.90 * (y1 - y0)
         xb = x0 + 0.78 * (x1 - x0)
@@ -190,6 +208,21 @@ def create_rule_network_visualization(
             arrowcolor="white",  # change to `color` if you want match edge color
             opacity=0.95,
         )
+        
+        # Add label for if_matched_sid edges
+        if label:
+            label_x = x0 + 0.5 * (x1 - x0)
+            label_y = y0 + 0.5 * (y1 - y0)
+            fig.add_annotation(
+                x=label_x, y=label_y,
+                text=label,
+                showarrow=False,
+                xref="x", yref="y",
+                font=dict(size=11, color="yellow"),
+                bgcolor="rgba(0,0,0,0.7)",
+                bordercolor="yellow",
+                borderwidth=1,
+            )
 
     return fig
 
@@ -221,6 +254,8 @@ def _create_empty_figure(message: str) -> go.Figure:
 
 def _format_connection_empty_message(connection_type: str) -> str:
     """Format empty message based on connection type."""
+    if connection_type == "if_matched_sid":
+        return "No rules with if_matched_sid connections found"
     if connection_type == "if_matched_group":
         return "No rules with if_matched_group connections found"
     if connection_type == "if_group":

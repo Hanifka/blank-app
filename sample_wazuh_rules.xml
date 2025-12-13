@@ -80,11 +80,37 @@
 
   <!-- Rule with multiple filter conditions -->
   <rule id="100010" level="5">
-    <description>Brute force detection rule</description>
-    <frequency>10</frequency>
-    <timeframe>300</timeframe>
-    <same_field>dest_ip</same_field>
-    <ignore>white_list_admin</ignore>
-    <group>web, authentication, brute_force</group>
+   <description>Brute force detection rule</description>
+   <frequency>10</frequency>
+   <timeframe>300</timeframe>
+   <same_field>dest_ip</same_field>
+   <ignore>white_list_admin</ignore>
+   <group>web, authentication, brute_force</group>
   </rule>
-</ruleset>
+
+  <!-- Rule with if_matched_sid (frequency-based parent rule) -->
+  <rule id="100539" level="12" frequency="8" timeframe="60">
+   <description>Frequency-based alert: 8 matches in 60 seconds</description>
+   <if_matched_sid>100537</if_matched_sid>
+   <group>web, frequency_based</group>
+  </rule>
+
+  <!-- Rule with if_matched_sid (another example) -->
+  <rule id="100540" level="10" frequency="5" timeframe="120">
+   <description>Frequency-based alert: 5 matches in 120 seconds</description>
+   <if_matched_sid>100538</if_matched_sid>
+   <group>web, frequency_based</group>
+  </rule>
+
+  <!-- Parent rule for 100539 -->
+  <rule id="100537" level="4">
+   <description>Suspicious pattern detected</description>
+   <group>web, base_event</group>
+  </rule>
+
+  <!-- Parent rule for 100540 -->
+  <rule id="100538" level="3">
+   <description>Base event detection</description>
+   <group>web, base_event</group>
+  </rule>
+  </ruleset>
