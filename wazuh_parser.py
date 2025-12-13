@@ -144,23 +144,7 @@ def _parse_rule_element(rule_elem: ET.Element) -> Optional[RuleData]:
     if groups_elem is not None and groups_elem.text:
         groups = [g.strip() for g in groups_elem.text.split(",")]
 
-    # Extract frequency and timeframe from rule attributes
-    frequency = None
-    timeframe = None
-    freq_str = rule_elem.get("frequency")
-    if freq_str:
-        try:
-            frequency = int(freq_str)
-        except ValueError:
-            pass
-    timeframe_str = rule_elem.get("timeframe")
-    if timeframe_str:
-        try:
-            timeframe = int(timeframe_str)
-        except ValueError:
-            pass
-
-    return RuleData(
+    rule = RuleData(
         rule_id=rule_id,
         level=level,
         description=description,
@@ -170,9 +154,25 @@ def _parse_rule_element(rule_elem: ET.Element) -> Optional[RuleData]:
         cis_controls=cis_controls,
         nist_controls=nist_controls,
         groups=groups,
-        frequency=frequency,
-        timeframe=timeframe,
     )
+
+    # Extract frequency and timeframe attributes
+    frequency_str = rule_elem.get("frequency")
+    timeframe_str = rule_elem.get("timeframe")
+
+    if frequency_str:
+        try:
+            rule.frequency = int(frequency_str)
+        except ValueError:
+            pass
+
+    if timeframe_str:
+        try:
+            rule.timeframe = int(timeframe_str)
+        except ValueError:
+            pass
+
+    return rule
 
 
 def _parse_detection_cues(rule_elem: ET.Element) -> DetectionCues:
@@ -192,21 +192,20 @@ def _parse_detection_cues(rule_elem: ET.Element) -> DetectionCues:
             decoded_as = program_name.text
 
     # Look for if_sid (parent rule)
-    if_sid_elem = rule_elem.find("if_sid")
-    if if_sid_elem is not None and if_sid_elem.text:
+    if_sid_text = rule_elem.findtext("if_sid")
+    if if_sid_text:
         try:
-            if_sid = int(if_sid_elem.text)
+            if_sid = int(if_sid_text.split(",")[0].strip())
         except ValueError:
             pass
 
     # Look for if_matched_sid (parent rule - frequency-based)
-    if_matched_sid_elem = rule_elem.find("if_matched_sid")
-    if if_matched_sid_elem is not None and if_matched_sid_elem.text:
+    if_matched_sid_text = rule_elem.findtext("if_matched_sid")
+    if if_matched_sid_text:
         try:
-            # Handle comma-separated list of IDs
             if_matched_sid = [
-                int(x.strip()) 
-                for x in if_matched_sid_elem.text.split(',') 
+                int(x.strip())
+                for x in if_matched_sid_text.split(",")
                 if x.strip()
             ]
         except ValueError:
