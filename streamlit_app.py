@@ -503,19 +503,8 @@ def main():
 
         Please
         """)
-        st.write(
-        "Hi, I'm [Your Name]. "
-        "If you find any issues or have feedback, please contact me!"
-        )
-    
-        contact_method = st.selectbox(
-            "How would you like to contact me?",
-            ("Email", "Home phone", "Mobile phone"),
-        )  # [[Main concepts](https://docs.streamlit.io/get-started/fundamentals/main-concepts)]
-    
-        message = st.text_area("Your message")
-        if st.button("Send"):
-            st.write("Thanks for your feedback!")
+   
+
         
         if st.session_state.rules:
             st.divider()
