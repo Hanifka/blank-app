@@ -283,6 +283,27 @@ def render_connection_type_selector() -> str:
     )
 
 
+def render_node_display_options() -> dict:
+    """Render node display option toggles and return the selected options."""
+    st.subheader("Node Display Options")
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        show_rule_id = st.checkbox("Rule ID", value=True, disabled=True)  # Always on
+
+    with col2:
+        show_desc_on_node = st.checkbox("Description on Node", value=False)
+
+    with col3:
+        show_cond_on_node = st.checkbox("Conditions on Node", value=False)
+
+    return {
+        "show_rule_id": show_rule_id,
+        "show_desc_on_node": show_desc_on_node,
+        "show_cond_on_node": show_cond_on_node,
+    }
+
+
 def render_rule_filters(rules: List[RuleData]) -> List[RuleData]:
     """Render global rule filters and return the filtered rule set."""
     if not rules:
@@ -316,7 +337,7 @@ def render_rule_filters(rules: List[RuleData]) -> List[RuleData]:
     return filtered_rules
 
 
-def render_flowchart_visualization(rules: List[RuleData], connection_type: str):
+def render_flowchart_visualization(rules: List[RuleData], connection_type: str, display_options: dict):
     """Render network visualization for the filtered rules."""
     st.subheader("📊 Rule Relationship Network")
 
@@ -325,7 +346,12 @@ def render_flowchart_visualization(rules: List[RuleData], connection_type: str):
         return
 
     try:
-        fig = create_rule_network_visualization(rules, connection_type=connection_type)
+        fig = create_rule_network_visualization(
+            rules, 
+            connection_type=connection_type,
+            show_desc_on_node=display_options["show_desc_on_node"],
+            show_cond_on_node=display_options["show_cond_on_node"]
+        )
         st.plotly_chart(fig, use_container_width=True)
     except Exception as e:
         st.error(f"❌ Error creating visualization: {str(e)}")
@@ -481,10 +507,13 @@ def main():
         connection_type = render_connection_type_selector()
         st.divider()
 
+        display_options = render_node_display_options()
+        st.divider()
+
         filtered_rules = render_rule_filters(st.session_state.rules)
         st.divider()
 
-        render_flowchart_visualization(filtered_rules, connection_type)
+        render_flowchart_visualization(filtered_rules, connection_type, display_options)
         st.divider()
 
         # Show debug log
