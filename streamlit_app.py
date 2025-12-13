@@ -500,7 +500,7 @@ def main():
 
             """
         )
-        st.error("❌ If this website has been helpful, please consider using it regularly. If you run into any issues or bugs, feel free to reach out to me here.")
+        st.info("🧪 If you’re willing, please help me by trying this tool and sharing any feedback or issues you find. You can reach me here anytime.")
 
         if st.session_state.rules:
             st.divider()
