@@ -52,6 +52,18 @@ SAMPLE_VALID_XML = """<?xml version="1.0" encoding="UTF-8"?>
 </ruleset>
 """
 
+SAMPLE_WITH_IF_MATCHED_SID = """<?xml version="1.0" encoding="UTF-8"?>
+<ruleset>
+    <rule id="100537" level="4">
+        <description>Suspicious pattern detected</description>
+    </rule>
+    <rule id="100539" level="12" frequency="8" timeframe="60">
+        <description>Frequency-based alert: 8 matches in 60 seconds</description>
+        <if_matched_sid>100537</if_matched_sid>
+    </rule>
+</ruleset>
+"""
+
 SAMPLE_WITH_REFERENCES = """<?xml version="1.0" encoding="UTF-8"?>
 <ruleset>
     <rule id="2001" level="8">
@@ -321,6 +333,28 @@ class TestRelationshipExtraction(unittest.TestCase):
         self.assertEqual(len(if_group_rels), 1)
         self.assertEqual(if_group_rels[0]["source_rule_id"], 1004)
         self.assertEqual(if_group_rels[0]["target_group"], "sysmon_event3")
+
+    def test_extract_if_matched_sid_frequency_timeframe(self):
+        rules, warnings = parse_wazuh_xml(SAMPLE_WITH_IF_MATCHED_SID)
+
+        self.assertEqual(warnings, [])
+        rule = [r for r in rules if r.rule_id == 100539][0]
+
+        self.assertEqual(rule.detection_cues.if_matched_sid, [100537])
+        self.assertEqual(rule.frequency, 8)
+        self.assertEqual(rule.timeframe, 60)
+
+        relationships = extract_relationships(rules)
+        matched_rels = [
+            r
+            for r in relationships
+            if r["relationship_type"] == "if_matched_sid"
+            and r["source_rule_id"] == 100539
+        ]
+        self.assertEqual(len(matched_rels), 1)
+        self.assertEqual(matched_rels[0]["target_rule_id"], 100537)
+        self.assertEqual(matched_rels[0]["frequency"], 8)
+        self.assertEqual(matched_rels[0]["timeframe"], 60)
 
 
 if __name__ == "__main__":
