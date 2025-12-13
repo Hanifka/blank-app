@@ -334,15 +334,13 @@ class TestRelationshipExtraction(unittest.TestCase):
         self.assertEqual(if_group_rels[0]["source_rule_id"], 1004)
         self.assertEqual(if_group_rels[0]["target_group"], "sysmon_event3")
 
-    def test_extract_if_matched_sid_frequency_timeframe(self):
+    def test_extract_if_matched_sid(self):
         rules, warnings = parse_wazuh_xml(SAMPLE_WITH_IF_MATCHED_SID)
 
         self.assertEqual(warnings, [])
         rule = [r for r in rules if r.rule_id == 100539][0]
 
         self.assertEqual(rule.detection_cues.if_matched_sid, [100537])
-        self.assertEqual(rule.frequency, 8)
-        self.assertEqual(rule.timeframe, 60)
 
         relationships = extract_relationships(rules)
         matched_rels = [
@@ -353,8 +351,6 @@ class TestRelationshipExtraction(unittest.TestCase):
         ]
         self.assertEqual(len(matched_rels), 1)
         self.assertEqual(matched_rels[0]["target_rule_id"], 100537)
-        self.assertEqual(matched_rels[0]["frequency"], 8)
-        self.assertEqual(matched_rels[0]["timeframe"], 60)
 
 
 if __name__ == "__main__":

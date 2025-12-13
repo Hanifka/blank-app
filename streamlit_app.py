@@ -273,7 +273,7 @@ def render_connection_type_selector() -> str:
         options=["if_sid", "if_matched_sid", "if_matched_group", "if_group"],
         format_func=lambda x: {
             "if_sid": "🔗 Parent Rules (if_sid)",
-            "if_matched_sid": "⏱️ Frequency-based (if_matched_sid)",
+            "if_matched_sid": "🔗 Matched Rules (if_matched_sid)",
             "if_matched_group": "🔀 Group Correlations (if_matched_group)",
             "if_group": "📦 Group Rules (if_group)",
         }[x],

@@ -48,8 +48,6 @@ class RuleData:
     cis_controls: List[str] = field(default_factory=list)
     nist_controls: List[str] = field(default_factory=list)
     groups: List[str] = field(default_factory=list)
-    frequency: Optional[int] = None
-    timeframe: Optional[int] = None
 
 
 def parse_wazuh_xml(
@@ -156,22 +154,6 @@ def _parse_rule_element(rule_elem: ET.Element) -> Optional[RuleData]:
         groups=groups,
     )
 
-    # Extract frequency and timeframe attributes
-    frequency_str = rule_elem.get("frequency")
-    timeframe_str = rule_elem.get("timeframe")
-
-    if frequency_str:
-        try:
-            rule.frequency = int(frequency_str)
-        except ValueError:
-            pass
-
-    if timeframe_str:
-        try:
-            rule.timeframe = int(timeframe_str)
-        except ValueError:
-            pass
-
     return rule
 
 
@@ -199,17 +181,10 @@ def _parse_detection_cues(rule_elem: ET.Element) -> DetectionCues:
         except ValueError:
             pass
 
-    # Look for if_matched_sid (parent rule - frequency-based)
+    # Extract if_matched_sid (same as if_sid)
     if_matched_sid_text = rule_elem.findtext("if_matched_sid")
     if if_matched_sid_text:
-        try:
-            if_matched_sid = [
-                int(x.strip())
-                for x in if_matched_sid_text.split(",")
-                if x.strip()
-            ]
-        except ValueError:
-            pass
+        if_matched_sid = [int(x.strip()) for x in if_matched_sid_text.split(',') if x.strip()]
 
     # Look for if_matched_group (parent rule groups)
     for if_matched_group_elem in rule_elem.findall("if_matched_group"):
@@ -424,9 +399,7 @@ def extract_relationships(rules: List[RuleData]) -> List[Dict[str, Any]]:
                 "source_rule_id": rule.rule_id,
                 "target_rule_id": matched_sid,
                 "relationship_type": "if_matched_sid",
-                "frequency": rule.frequency,
-                "timeframe": rule.timeframe,
-                "description": f"Rule {rule.rule_id} triggers on rule {matched_sid} (frequency: {rule.frequency}, timeframe: {rule.timeframe}s)"
+                "description": f"Rule {rule.rule_id} triggers on rule {matched_sid}"
             })
         
         # if_matched_group relationships
@@ -504,8 +477,6 @@ def generate_debug_log(rules: List[RuleData]) -> str:
         )
         lines.append(f"if_matched_group Extracted: {rule.detection_cues.if_matched_groups}")
         lines.append(f"if_group Extracted: {getattr(rule.detection_cues, 'if_groups', [])}")
-        lines.append(f"Frequency: {rule.frequency}")
-        lines.append(f"Timeframe: {rule.timeframe}")
         lines.append(f"MITRE Techniques Extracted: {rule.mitre_techniques}")
         lines.append(f"CIS Controls Extracted: {rule.cis_controls}")
         lines.append(f"NIST Controls Extracted: {rule.nist_controls}")
@@ -521,15 +492,11 @@ def generate_debug_log(rules: List[RuleData]) -> str:
         
         matched_sids = getattr(rule.detection_cues, "if_matched_sid", [])
         if matched_sids:
-            freq_str = (
-                f"frequency: {rule.frequency}, timeframe: {rule.timeframe}s"
-                if rule.frequency and rule.timeframe
-                else ""
-            )
-            lines.append(
-                f"  - Rule {rule.rule_id} --if_matched_sid--> {matched_sids} ({freq_str})"
-            )
-            relationships_found = True
+            for matched_sid in matched_sids:
+                lines.append(
+                    f"  - Rule {rule.rule_id} --if_matched_sid--> {matched_sid}"
+                )
+                relationships_found = True
         
         for group in rule.detection_cues.if_matched_groups:
             lines.append(f"  - Rule {rule.rule_id} --if_matched_group--> {group}")
