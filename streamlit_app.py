@@ -501,14 +501,29 @@ def main():
             """
         )
         
-        st.info(
-                "📬 **Contact / Feedback**\n\n"
-                "If you’d like to share feedback, report a bug, or suggest improvements, you can reach me here:\n"
-                "- **Ambassador profile:** https://wazuh.com/ambassadors/hanif-kurniawan-atmanto/\n\n"
-                "You can also contact me via the **Wazuh Community Slack**:\n"
-                "- **Join Slack (official):** https://wazuh.com/community/ (click **Slack channel → Join**)\n"
-                "- After joining, search for **“Hanif K”** (or **Hanif Kurniawan**) and message me.\n"
+        st.divider()
+
+        with st.expander("📬 Contact / Feedback", expanded=False):
+            st.caption("If you find issues or have ideas, feel free to reach out:")
+    
+            st.markdown(
+                "🛡️ **Ambassador profile:** "
+                "[Hanif Kurniawan Atmanto](https://wazuh.com/ambassadors/hanif-kurniawan-atmanto/)"
             )
+    
+            st.markdown(
+                "💬 **Wazuh Community Slack:** "
+                "[Join here](https://wazuh.com/community/) "
+                "→ open **Slack channel → Join**"
+            )
+    
+            st.caption(
+                          'After joining, search **"Hanif K"** and DM me. '
+                          'Please include the **error**, what you clicked, and (if possible) the **rule XML**.'
+                        )
+
+
+        st.divider()
 
         if st.session_state.rules:
             st.divider()
