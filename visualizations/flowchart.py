@@ -74,14 +74,15 @@ def create_rule_network_visualization(
                 G.add_edge(parent_id, rule.rule_id, color="blue")
 
         elif connection_type == "if_matched_sid":
-            parent_id = getattr(cues, "if_matched_sid", None) if cues else None
-            if parent_id and parent_id in filtered_rule_ids:
-                frequency = getattr(rule, "frequency", None)
-                timeframe = getattr(rule, "timeframe", None)
-                label = ""
-                if frequency and timeframe:
-                    label = f"{frequency}x/{timeframe}s"
-                G.add_edge(parent_id, rule.rule_id, color="yellow", label=label, frequency=frequency, timeframe=timeframe)
+            matched_sids = getattr(cues, "if_matched_sid", []) if cues else []
+            for parent_id in matched_sids:
+                if parent_id in filtered_rule_ids:
+                    frequency = getattr(rule, "frequency", None)
+                    timeframe = getattr(rule, "timeframe", None)
+                    label = ""
+                    if frequency and timeframe:
+                        label = f"{frequency}x/{timeframe}s"
+                    G.add_edge(parent_id, rule.rule_id, color="yellow", label=label, frequency=frequency, timeframe=timeframe)
 
         elif connection_type == "if_matched_group":
             matched_groups = getattr(cues, "if_matched_groups", None) if cues else None

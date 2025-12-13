@@ -18,7 +18,7 @@ class DetectionCues:
     """Captures detection-related information from a rule."""
     decoded_as: Optional[str] = None
     if_sid: Optional[int] = None
-    if_matched_sid: Optional[int] = None
+    if_matched_sid: List[int] = field(default_factory=list)
     if_matched_groups: List[str] = field(default_factory=list)
     if_groups: List[str] = field(default_factory=list)
     description: Optional[str] = None
@@ -179,7 +179,7 @@ def _parse_detection_cues(rule_elem: ET.Element) -> DetectionCues:
     """Extract detection-related cues from a rule element."""
     decoded_as = None
     if_sid = None
-    if_matched_sid = None
+    if_matched_sid = []
     if_matched_groups = []
     if_groups = []
     description = None
@@ -203,7 +203,12 @@ def _parse_detection_cues(rule_elem: ET.Element) -> DetectionCues:
     if_matched_sid_elem = rule_elem.find("if_matched_sid")
     if if_matched_sid_elem is not None and if_matched_sid_elem.text:
         try:
-            if_matched_sid = int(if_matched_sid_elem.text)
+            # Handle comma-separated list of IDs
+            if_matched_sid = [
+                int(x.strip()) 
+                for x in if_matched_sid_elem.text.split(',') 
+                if x.strip()
+            ]
         except ValueError:
             pass
 
@@ -228,8 +233,8 @@ def _parse_detection_cues(rule_elem: ET.Element) -> DetectionCues:
     rule_id = rule_elem.get("id", "unknown")
     if if_sid:
         logger.info(f"Rule {rule_id} --if_sid--> {if_sid}")
-    if if_matched_sid:
-        logger.info(f"Rule {rule_id} --if_matched_sid--> {if_matched_sid}")
+    for matched_sid in if_matched_sid:
+        logger.info(f"Rule {rule_id} --if_matched_sid--> {matched_sid}")
     for group in if_matched_groups:
         logger.info(f"Rule {rule_id} --if_matched_group--> {group}")
     for group in if_groups:
@@ -415,14 +420,14 @@ def extract_relationships(rules: List[RuleData]) -> List[Dict[str, Any]]:
             })
         
         # if_matched_sid relationships
-        if rule.detection_cues.if_matched_sid:
+        for matched_sid in rule.detection_cues.if_matched_sid:
             relationships.append({
                 "source_rule_id": rule.rule_id,
-                "target_rule_id": rule.detection_cues.if_matched_sid,
+                "target_rule_id": matched_sid,
                 "relationship_type": "if_matched_sid",
                 "frequency": rule.frequency,
                 "timeframe": rule.timeframe,
-                "description": f"Rule {rule.rule_id} triggers on rule {rule.detection_cues.if_matched_sid} (frequency: {rule.frequency}, timeframe: {rule.timeframe}s)"
+                "description": f"Rule {rule.rule_id} triggers on rule {matched_sid} (frequency: {rule.frequency}, timeframe: {rule.timeframe}s)"
             })
         
         # if_matched_group relationships
@@ -495,7 +500,7 @@ def generate_debug_log(rules: List[RuleData]) -> str:
         
         lines.append(f"Groups Extracted: {rule.groups}")
         lines.append(f"if_sid Extracted: {[rule.detection_cues.if_sid] if rule.detection_cues.if_sid else []}")
-        lines.append(f"if_matched_sid Extracted: {[rule.detection_cues.if_matched_sid] if rule.detection_cues.if_matched_sid else []}")
+        lines.append(f"if_matched_sid Extracted: {rule.detection_cues.if_matched_sid}")
         lines.append(f"if_matched_group Extracted: {rule.detection_cues.if_matched_groups}")
         lines.append(f"if_group Extracted: {getattr(rule.detection_cues, 'if_groups', [])}")
         lines.append(f"Frequency: {rule.frequency}")
