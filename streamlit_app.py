@@ -1,7 +1,7 @@
 import streamlit as st
 import os
 import xml.etree.ElementTree as ET
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Tuple
 from xml.dom import minidom
 
 from wazuh_parser import parse_wazuh_xml, RuleData, summarize_filter_logic, generate_debug_log
@@ -283,6 +283,20 @@ def render_connection_type_selector() -> str:
     )
 
 
+def render_display_options() -> Tuple[bool, bool]:
+    """Render display option toggles for descriptions and filter conditions."""
+    st.subheader("Display Options")
+    col1, col2 = st.columns(2)
+
+    with col1:
+        show_description = st.checkbox("Show Descriptions", value=True, help="Toggle rule descriptions visibility")
+
+    with col2:
+        show_filters = st.checkbox("Show Filter Conditions", value=True, help="Toggle filter conditions visibility")
+
+    return show_description, show_filters
+
+
 def render_rule_filters(rules: List[RuleData]) -> List[RuleData]:
     """Render global rule filters and return the filtered rule set."""
     if not rules:
@@ -331,7 +345,7 @@ def render_flowchart_visualization(rules: List[RuleData], connection_type: str):
         st.error(f"❌ Error creating visualization: {str(e)}")
 
 
-def render_rule_details(rules: List[RuleData], rule_xml_map: Optional[Dict[int, str]] = None):
+def render_rule_details(rules: List[RuleData], rule_xml_map: Optional[Dict[int, str]] = None, show_description: bool = True, show_filters: bool = True):
     """Render detailed rule information in tabular/accordion format."""
     if not rules:
         st.info("No rules match the current filters.")
@@ -388,10 +402,11 @@ def render_rule_details(rules: List[RuleData], rule_xml_map: Optional[Dict[int, 
             col1, col2 = st.columns([2, 1])
 
             with col1:
-                st.markdown("**Description:**")
-                st.write(rule.description if rule.description else "_No description_")
+                if show_description:
+                    st.markdown("**Description:**")
+                    st.write(rule.description if rule.description else "_No description_")
 
-                if rule.filter_conditions:
+                if show_filters and rule.filter_conditions:
                     st.markdown("**Filter Logic:**")
                     filter_summary = summarize_filter_logic(rule.filter_conditions)
                     st.code(filter_summary, language=None)
@@ -481,6 +496,9 @@ def main():
         connection_type = render_connection_type_selector()
         st.divider()
 
+        show_description, show_filters = render_display_options()
+        st.divider()
+
         filtered_rules = render_rule_filters(st.session_state.rules)
         st.divider()
 
@@ -508,7 +526,7 @@ def main():
 
         st.divider()
 
-        render_rule_details(filtered_rules, st.session_state.rule_xml_map)
+        render_rule_details(filtered_rules, st.session_state.rule_xml_map, show_description, show_filters)
     else:
         st.info("👆 Upload a Wazuh XML file, load the sample, or paste rules to get started")
 
