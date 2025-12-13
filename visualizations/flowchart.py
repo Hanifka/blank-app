@@ -30,6 +30,8 @@ def create_rule_network_visualization(
     connection_type: str = "if_sid",
     min_level: int = 0,
     selected_groups: Optional[List[str]] = None,
+    show_desc_on_node: bool = False,
+    show_cond_on_node: bool = False,
 ) -> go.Figure:
     # ---- Filter rules ----
     filtered_rules = [r for r in rules if getattr(r, "level", 0) >= min_level]
@@ -128,7 +130,7 @@ def create_rule_network_visualization(
         edges_for_arrows.append((x0, y0, x1, y1, color))
 
     # ---- Nodes ----
-    node_x, node_y, node_text, node_color = [], [], [], []
+    node_x, node_y, node_text, node_hover_text, node_color = [], [], [], [], []
 
     for node in G.nodes():
         x, y = pos[node]
@@ -138,23 +140,69 @@ def create_rule_network_visualization(
         level = G.nodes[node].get("level", 0)
         description = G.nodes[node].get("description", "")
         groups = G.nodes[node].get("groups", []) or []
-        groups_str = ", ".join(groups) if groups else "None"
-
-        node_text.append(
-            f"Rule {node} (Level {level})<br>"
-            f"Description: {description}<br>"
-            f"Groups: {groups_str}"
-        )
+        
+        # Create rule lookup for comprehensive hover text and condition display
+        rule = next((r for r in filtered_rules if r.rule_id == node), None)
+        
+        # Build node text based on toggle settings
+        text_lines = [str(node)]  # Rule ID always first
+        
+        if show_desc_on_node and description:
+            desc = description[:20] + "..." if len(description) > 20 else description
+            text_lines.append(desc)
+        
+        if show_cond_on_node and rule and getattr(rule, 'filter_conditions', None):
+            conditions = rule.filter_conditions
+            if conditions:
+                cond = conditions[0]
+                if hasattr(cond, 'field') and cond.field:
+                    cond_text = f"field: {cond.field[:15]}"
+                elif hasattr(cond, 'match') and cond.match:
+                    cond_text = f"match: {cond.match[:15]}"
+                elif hasattr(cond, 'frequency') and cond.frequency:
+                    cond_text = f"frequency: {cond.frequency}"
+                else:
+                    cond_text = "filter condition"
+                text_lines.append(cond_text)
+        
+        node_display_text = "<br>".join(text_lines)
+        node_text.append(node_display_text)
+        
+        # Create comprehensive hover text (always shows full info)
+        if rule:
+            hover_text = f"<b>Rule {rule.rule_id}</b><br>"
+            hover_text += f"Level: {rule.level}<br>"
+            hover_text += f"<b>Description:</b><br>{rule.description}<br>"
+            
+            if rule.filter_conditions:
+                hover_text += "<b>Filter Conditions:</b><br>"
+                for cond in rule.filter_conditions[:2]:  # Show up to 2 conditions
+                    if hasattr(cond, 'field') and cond.field:
+                        hover_text += f"• Field: {cond.field}<br>"
+                    if hasattr(cond, 'match') and cond.match:
+                        hover_text += f"• Match: {cond.match}<br>"
+                    if hasattr(cond, 'frequency') and cond.frequency:
+                        hover_text += f"• Frequency: {cond.frequency}<br>"
+        else:
+            # Fallback hover text if rule lookup fails
+            groups_str = ", ".join(groups) if groups else "None"
+            hover_text = (
+                f"Rule {node} (Level {level})<br>"
+                f"Description: {description}<br>"
+                f"Groups: {groups_str}"
+            )
+        
+        node_hover_text.append(hover_text)
         node_color.append(get_severity_color(level))
 
     node_trace = go.Scatter(
         x=node_x,
         y=node_y,
         mode="markers+text",
-        text=[str(n) for n in G.nodes()],
+        text=node_text,
         textposition="top center",
         textfont=dict(size=12, color="white"),
-        hovertext=node_text,
+        hovertext=node_hover_text,
         hoverinfo="text",
         marker=dict(
             size=16,
