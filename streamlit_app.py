@@ -500,7 +500,15 @@ def main():
 
             """
         )
-        st.info("🧪 If you’re willing, please help me by trying this tool and sharing any feedback or issues you find. You can reach me here anytime.")
+        
+        st.info(
+                "📬 **Contact / Feedback**\n\n"
+                "If you’d like to share feedback, report a bug, or suggest improvements, you can reach me here:\n"
+                "- **Ambassador profile:** https://wazuh.com/ambassadors/hanif-kurniawan-atmanto/\n\n"
+                "You can also contact me via the **Wazuh Community Slack**:\n"
+                "- **Join Slack (official):** https://wazuh.com/community/ (click **Slack channel → Join**)\n"
+                "- After joining, search for **“Hanif K”** (or **Hanif Kurniawan**) and message me.\n"
+            )
 
         if st.session_state.rules:
             st.divider()
