@@ -265,22 +265,29 @@ def render_metadata_summary(rules: List[RuleData], warnings: List[str]):
             st.markdown(f"_...and {len(all_groups) - 10} more_")
 
 
-def render_connection_type_selector() -> str:
-    """Render the connection type selector for the visualization."""
-    st.subheader("Connection Type")
-    return st.radio(
-        "Connection Type",
-        options=["if_sid", "if_matched_sid", "if_matched_group", "if_group"],
-        format_func=lambda x: {
-            "if_sid": "🔗 Parent Rules (if_sid)",
-            "if_matched_sid": "🔗 Matched Rules (if_matched_sid)",
-            "if_matched_group": "🔀 Group Correlations (if_matched_group)",
-            "if_group": "📦 Group Rules (if_group)",
-        }[x],
-        horizontal=True,
-        label_visibility="collapsed",
-        help="Choose which rule relationships to visualize",
-    )
+def render_connection_type_toggles() -> dict:
+    """Render connection type toggles and return the selected options."""
+    st.subheader("Connection Types")
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        show_if_sid = st.checkbox("🔗 Parent Rules (if_sid)", value=True)
+    
+    with col2:
+        show_if_matched_sid = st.checkbox("🔗 Matched Rules (if_matched_sid)", value=True)
+    
+    with col3:
+        show_if_matched_group = st.checkbox("🔀 Group Correlations (if_matched_group)", value=True)
+    
+    with col4:
+        show_if_group = st.checkbox("📦 Group Rules (if_group)", value=True)
+    
+    return {
+        "show_if_sid": show_if_sid,
+        "show_if_matched_sid": show_if_matched_sid,
+        "show_if_matched_group": show_if_matched_group,
+        "show_if_group": show_if_group,
+    }
 
 
 def render_node_display_options() -> dict:
@@ -337,7 +344,7 @@ def render_rule_filters(rules: List[RuleData]) -> List[RuleData]:
     return filtered_rules
 
 
-def render_flowchart_visualization(rules: List[RuleData], connection_type: str, display_options: dict):
+def render_flowchart_visualization(rules: List[RuleData], connection_toggles: dict, display_options: dict):
     """Render network visualization for the filtered rules."""
     st.subheader("📊 Rule Relationship Network")
 
@@ -348,7 +355,10 @@ def render_flowchart_visualization(rules: List[RuleData], connection_type: str, 
     try:
         fig = create_rule_network_visualization(
             rules, 
-            connection_type=connection_type,
+            show_if_sid=connection_toggles["show_if_sid"],
+            show_if_matched_sid=connection_toggles["show_if_matched_sid"],
+            show_if_matched_group=connection_toggles["show_if_matched_group"],
+            show_if_group=connection_toggles["show_if_group"],
             show_desc_on_node=display_options["show_desc_on_node"],
             show_cond_on_node=display_options["show_cond_on_node"]
         )
@@ -504,7 +514,7 @@ def main():
         render_metadata_summary(st.session_state.rules, st.session_state.warnings or [])
         st.divider()
 
-        connection_type = render_connection_type_selector()
+        connection_toggles = render_connection_type_toggles()
         st.divider()
 
         display_options = render_node_display_options()
@@ -513,7 +523,7 @@ def main():
         filtered_rules = render_rule_filters(st.session_state.rules)
         st.divider()
 
-        render_flowchart_visualization(filtered_rules, connection_type, display_options)
+        render_flowchart_visualization(filtered_rules, connection_toggles, display_options)
         st.divider()
 
         # Show debug log

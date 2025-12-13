@@ -29,7 +29,7 @@ def test_with_sample_data():
     print("\n📋 Testing visualization with description toggle...")
     fig = create_rule_network_visualization(
         rules[:10],  # Use first 10 rules for testing
-        connection_type="if_sid",
+        show_if_sid=True,
         show_desc_on_node=True,
         show_cond_on_node=True
     )
