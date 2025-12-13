@@ -501,11 +501,9 @@ def main():
         - 🔍 Rule search and filtering
         - 📄 View full XML for each rule
 
-        Please
+
         """)
    
-
-        
         if st.session_state.rules:
             st.divider()
             st.caption(f"📦 Rules: {len(st.session_state.rules)}")
