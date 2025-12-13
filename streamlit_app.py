@@ -498,12 +498,11 @@ def main():
         - 📁 XML file upload
         - 🔗 Network visualization with 3 connection types
         - 🔧 Rule level and ID filters
+        - 📊 Rule statistics
         - 🔍 Rule search and filtering
         - 📄 View full XML for each rule
-
-
         """)
-   
+        
         if st.session_state.rules:
             st.divider()
             st.caption(f"📦 Rules: {len(st.session_state.rules)}")
