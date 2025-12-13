@@ -420,7 +420,7 @@ def extract_relationships(rules: List[RuleData]) -> List[Dict[str, Any]]:
             })
         
         # if_matched_sid relationships
-        for matched_sid in rule.detection_cues.if_matched_sid:
+        for matched_sid in getattr(rule.detection_cues, "if_matched_sid", []):
             relationships.append({
                 "source_rule_id": rule.rule_id,
                 "target_rule_id": matched_sid,
@@ -500,7 +500,9 @@ def generate_debug_log(rules: List[RuleData]) -> str:
         
         lines.append(f"Groups Extracted: {rule.groups}")
         lines.append(f"if_sid Extracted: {[rule.detection_cues.if_sid] if rule.detection_cues.if_sid else []}")
-        lines.append(f"if_matched_sid Extracted: {rule.detection_cues.if_matched_sid}")
+        lines.append(
+            f"if_matched_sid Extracted: {getattr(rule.detection_cues, 'if_matched_sid', [])}"
+        )
         lines.append(f"if_matched_group Extracted: {rule.detection_cues.if_matched_groups}")
         lines.append(f"if_group Extracted: {getattr(rule.detection_cues, 'if_groups', [])}")
         lines.append(f"Frequency: {rule.frequency}")
@@ -518,10 +520,15 @@ def generate_debug_log(rules: List[RuleData]) -> str:
             )
             relationships_found = True
         
-        if rule.detection_cues.if_matched_sid is not None:
-            freq_str = f"frequency: {rule.frequency}, timeframe: {rule.timeframe}s" if rule.frequency and rule.timeframe else ""
+        matched_sids = getattr(rule.detection_cues, "if_matched_sid", [])
+        if matched_sids:
+            freq_str = (
+                f"frequency: {rule.frequency}, timeframe: {rule.timeframe}s"
+                if rule.frequency and rule.timeframe
+                else ""
+            )
             lines.append(
-                f"  - Rule {rule.rule_id} --if_matched_sid--> {rule.detection_cues.if_matched_sid} ({freq_str})"
+                f"  - Rule {rule.rule_id} --if_matched_sid--> {matched_sids} ({freq_str})"
             )
             relationships_found = True
         
