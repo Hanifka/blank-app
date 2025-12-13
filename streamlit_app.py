@@ -498,15 +498,9 @@ def main():
 
             Simple visualization of Wazuh XML security rules with network relationships.
 
-            **Features:**
-            - 📁 XML file upload
-            - 🔗 Network visualization with 3 connection types
-            - 🔧 Rule level and ID filters
-            - 📊 Rule statistics
-            - 🔍 Rule search and filtering
-            - 📄 View full XML for each rule
             """
         )
+        st.error("❌ If this website has been helpful, please consider using it regularly. If you run into any issues or bugs, feel free to reach out to me here.")
 
         if st.session_state.rules:
             st.divider()
