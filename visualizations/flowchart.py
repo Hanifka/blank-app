@@ -27,7 +27,10 @@ def get_severity_color(level: int) -> str:
 
 def create_rule_network_visualization(
     rules: List[RuleData],
-    connection_type: str = "if_sid",
+    show_if_sid: bool = True,
+    show_if_matched_sid: bool = True,
+    show_if_matched_group: bool = True,
+    show_if_group: bool = True,
     min_level: int = 0,
     selected_groups: Optional[List[str]] = None,
     show_desc_on_node: bool = False,
@@ -60,47 +63,56 @@ def create_rule_network_visualization(
 
     # Build group_to_rules only if needed
     group_to_rules = None
-    if connection_type in ("if_matched_group", "if_group"):
+    if show_if_matched_group or show_if_group:
         group_to_rules = defaultdict(list)
         for r in filtered_rules:
             for group in (getattr(r, "groups", None) or []):
                 group_to_rules[group].append(r.rule_id)
 
-    # ---- Add edges based on connection type ----
+    # ---- Add edges based on enabled connection types ----
     for rule in filtered_rules:
         cues = getattr(rule, "detection_cues", None)
 
-        if connection_type == "if_sid":
+        if show_if_sid:
             parent_id = getattr(cues, "if_sid", None) if cues else None
             if parent_id and parent_id in filtered_rule_ids:
-                G.add_edge(parent_id, rule.rule_id, color="blue")
+                G.add_edge(parent_id, rule.rule_id, color="blue", type="if_sid")
 
-        elif connection_type == "if_matched_sid":
+        if show_if_matched_sid:
             matched_sids = getattr(cues, "if_matched_sid", []) if cues else []
             for parent_id in matched_sids:
                 if parent_id in filtered_rule_ids:
-                    G.add_edge(parent_id, rule.rule_id, color="yellow")
+                    G.add_edge(parent_id, rule.rule_id, color="yellow", type="if_matched_sid")
 
-        elif connection_type == "if_matched_group":
+        if show_if_matched_group:
             matched_groups = getattr(cues, "if_matched_groups", None) if cues else None
             if matched_groups and group_to_rules:
                 for mg in matched_groups:
                     if mg in group_to_rules:
                         for src in group_to_rules[mg]:
                             if src != rule.rule_id:
-                                G.add_edge(src, rule.rule_id, color="green")
+                                G.add_edge(src, rule.rule_id, color="green", type="if_matched_group")
 
-        elif connection_type == "if_group":
+        if show_if_group:
             if_groups = getattr(cues, "if_groups", None) if cues else None
             if if_groups and group_to_rules:
                 for gname in if_groups:
                     if gname in group_to_rules:
                         for src in group_to_rules[gname]:
                             if src != rule.rule_id:
-                                G.add_edge(src, rule.rule_id, color="orange")
+                                G.add_edge(src, rule.rule_id, color="orange", type="if_group")
 
     if not G.edges():
-        return _create_empty_figure(_format_connection_empty_message(connection_type))
+        enabled_types = []
+        if show_if_sid:
+            enabled_types.append("if_sid")
+        if show_if_matched_sid:
+            enabled_types.append("if_matched_sid")
+        if show_if_matched_group:
+            enabled_types.append("if_matched_group")
+        if show_if_group:
+            enabled_types.append("if_group")
+        return _create_empty_figure(_format_connection_empty_message(enabled_types))
 
     # ---- Layout ----
     pos = nx.spring_layout(G, k=2, iterations=50, seed=42)
@@ -113,8 +125,17 @@ def create_rule_network_visualization(
         x0, y0 = pos[source]
         x1, y1 = pos[target]
         color = data.get("color", "gray")
+        edge_type = data.get("type", "unknown")
         
-        hover_text = f"Rule {source} → Rule {target}"
+        # Create hover text with connection type
+        type_labels = {
+            "if_sid": "Parent Rule",
+            "if_matched_sid": "Matched Rule",
+            "if_matched_group": "Group Correlation",
+            "if_group": "Group Rule"
+        }
+        type_label = type_labels.get(edge_type, edge_type)
+        hover_text = f"Rule {source} → Rule {target}<br>Type: {type_label}"
 
         edge_traces.append(
             go.Scatter(
@@ -276,12 +297,18 @@ def _create_empty_figure(message: str) -> go.Figure:
     return fig
 
 
-def _format_connection_empty_message(connection_type: str) -> str:
-    """Format empty message based on connection type."""
-    if connection_type == "if_matched_sid":
-        return "No rules with if_matched_sid connections found"
-    if connection_type == "if_matched_group":
-        return "No rules with if_matched_group connections found"
-    if connection_type == "if_group":
-        return "No rules with if_group connections found"
-    return "No rules with if_sid parent relationships found"
+def _format_connection_empty_message(enabled_types: List[str]) -> str:
+    """Format empty message based on enabled connection types."""
+    if not enabled_types:
+        return "No connection types enabled. Please enable at least one connection type."
+    
+    if len(enabled_types) == 1:
+        type_messages = {
+            "if_sid": "No rules with if_sid parent relationships found",
+            "if_matched_sid": "No rules with if_matched_sid connections found",
+            "if_matched_group": "No rules with if_matched_group connections found",
+            "if_group": "No rules with if_group connections found"
+        }
+        return type_messages.get(enabled_types[0], "No rule connections found")
+    
+    return f"No rules with {', '.join(enabled_types)} connections found"

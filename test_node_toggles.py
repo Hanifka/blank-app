@@ -29,13 +29,13 @@ def test_node_display_toggles():
     print(f"✅ Parsed {len(rules)} rules")
     
     # Test with default parameters (no toggles)
-    fig1 = create_rule_network_visualization(rules, connection_type="if_sid")
+    fig1 = create_rule_network_visualization(rules, show_if_sid=True)
     print("✅ Created visualization with default parameters")
     
     # Test with description toggle on
     fig2 = create_rule_network_visualization(
         rules, 
-        connection_type="if_sid",
+        show_if_sid=True,
         show_desc_on_node=True
     )
     print("✅ Created visualization with description toggle on")
@@ -43,7 +43,7 @@ def test_node_display_toggles():
     # Test with conditions toggle on
     fig3 = create_rule_network_visualization(
         rules, 
-        connection_type="if_sid",
+        show_if_sid=True,
         show_cond_on_node=True
     )
     print("✅ Created visualization with conditions toggle on")
@@ -51,7 +51,7 @@ def test_node_display_toggles():
     # Test with both toggles on
     fig4 = create_rule_network_visualization(
         rules, 
-        connection_type="if_sid",
+        show_if_sid=True,
         show_desc_on_node=True,
         show_cond_on_node=True
     )

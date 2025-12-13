@@ -17,13 +17,18 @@ def test_with_connection_types():
     print(f"📊 Parsed {len(rules)} rules")
     
     # Test different connection types to see which ones create edges
-    connection_types = ["if_sid", "if_matched_sid", "if_matched_group", "if_group"]
+    connection_configs = [
+        ("if_sid", dict(show_if_sid=True, show_if_matched_sid=False, show_if_matched_group=False, show_if_group=False)),
+        ("if_matched_sid", dict(show_if_sid=False, show_if_matched_sid=True, show_if_matched_group=False, show_if_group=False)),
+        ("if_matched_group", dict(show_if_sid=False, show_if_matched_sid=False, show_if_matched_group=True, show_if_group=False)),
+        ("if_group", dict(show_if_sid=False, show_if_matched_sid=False, show_if_matched_group=False, show_if_group=True)),
+    ]
     
-    for conn_type in connection_types:
-        print(f"\n🔍 Testing connection type: {conn_type}")
+    for conn_name, conn_kwargs in connection_configs:
+        print(f"\n🔍 Testing connection type: {conn_name}")
         fig = create_rule_network_visualization(
             rules,
-            connection_type=conn_type,
+            **conn_kwargs,
             show_desc_on_node=True,
             show_cond_on_node=True
         )
@@ -39,7 +44,7 @@ def test_with_connection_types():
                 lines = node_text.split("<br>")
                 print(f"   📝 Node text: {lines[:3]}...")  # Show first 3 lines
         else:
-            print(f"   ❌ No visualization created for {conn_type}")
+            print(f"   ❌ No visualization created for {conn_name}")
     
     # Let's create our own test data with clear relationships
     print("\n🧪 Creating test data with clear if_sid relationships")
@@ -68,7 +73,7 @@ def test_with_connection_types():
     # Test with our test data
     fig = create_rule_network_visualization(
         test_rules,
-        connection_type="if_sid",
+        show_if_sid=True,
         show_desc_on_node=True,
         show_cond_on_node=True
     )
@@ -84,7 +89,7 @@ def test_with_connection_types():
                 
                 fig_test = create_rule_network_visualization(
                     test_rules,
-                    connection_type="if_sid",
+                    show_if_sid=True,
                     show_desc_on_node=desc_toggle,
                     show_cond_on_node=cond_toggle
                 )

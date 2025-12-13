@@ -56,7 +56,7 @@ def test_comprehensive_toggles_fixed():
         
         fig = create_rule_network_visualization(
             test_rules,
-            connection_type="if_sid",
+            show_if_sid=True,
             show_desc_on_node=test_case["show_desc"],
             show_cond_on_node=test_case["show_cond"]
         )
@@ -111,7 +111,7 @@ def test_comprehensive_toggles_fixed():
     
     fig = create_rule_network_visualization(
         test_rules[:2],
-        connection_type="if_sid",
+        show_if_sid=True,
         show_desc_on_node=True,
         show_cond_on_node=True
     )
