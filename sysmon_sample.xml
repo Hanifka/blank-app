@@ -38,20 +38,16 @@
   </rule>
 
   <!-- Rule with if_matched_group relationship -->
-  <rule id="102502" level="10">
+  <rule id="102502" level="10" frequency="3" timeframe="300">
     <description>Correlation - Multiple suspicious process creation events</description>
     <if_matched_group>sysmon_event3</if_matched_group>
-    <frequency>3</frequency>
-    <timeframe>300</timeframe>
     <group>correlation</group>
   </rule>
 
   <!-- Rule with if_group relationship -->
-  <rule id="102503" level="9">
+  <rule id="102503" level="9" frequency="5" timeframe="600">
     <description>Group correlation - Sysmon network connections</description>
     <if_group>sysmon_event3</if_group>
-    <frequency>5</frequency>
-    <timeframe>600</timeframe>
     <group>correlation</group>
   </rule>
 
