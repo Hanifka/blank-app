@@ -1,81 +1,86 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<ruleset version="1" name="Sysmon Rules">
-  <!-- Base Sysmon rule -->
+<group name="sysmon,custom,">
+
+  <!-- Custom base Sysmon rule.
+       Tip: you can also make this a child of the built-in Sysmon base rule (61600),
+       but keeping it standalone is OK if your decoder/parent rules already tag Sysmon events. -->
   <rule id="61605" level="3">
-    <description>Sysmon base rule</description>
-    <decoder>
-      <program_name>sysmon</program_name>
-    </decoder>
-    <group>sysmon</group>
+    <description>Sysmon custom base rule</description>
+    <group>sysmon,sysmon_custom_base,</group>
   </rule>
 
-  <!-- Rules with if_sid relationships (should only connect to 61605) -->
+  <!-- Event ID 1: Process Creation - suspicious command line -->
   <rule id="102101" level="7">
-    <description>Sysmon process creation - suspicious command line</description>
     <if_sid>61605</if_sid>
-    <field>sysmon.event_id:1</field>
-    <match>.*powershell.*-enc.*|.*cmd.*\/c.*powershell.*</match>
+    <field name="win.system.eventID">^1$</field>
+    <field name="win.eventdata.commandLine" type="pcre2">(?i)\bpowershell(\.exe)?\b.*\s-(enc|encodedcommand)\b|\bcmd(\.exe)?\b.*\s\/c\s+.*powershell</field>
+    <description>Sysmon - Event 1: suspicious PowerShell encoded command</description>
     <mitre>
       <id>T1059.001</id>
     </mitre>
-    <group>sysmon_event1</group>
+    <group>sysmon_event_1,sysmon_suspicious_proc,</group>
   </rule>
 
+  <!-- Event ID 1: suspicious parent process -->
   <rule id="102102" level="8">
-    <description>Sysmon process creation - suspicious parent process</description>
     <if_sid>61605</if_sid>
-    <field>sysmon.event_id:1</field>
-    <field>sysmon.parent_image:.*\\word\.exe$</field>
-    <group>sysmon_event1</group>
+    <field name="win.system.eventID">^1$</field>
+    <field name="win.eventdata.parentImage" type="pcre2">(?i)\\(winword|word)\.exe$</field>
+    <description>Sysmon - Event 1: suspicious parent process (Word spawning a process)</description>
+    <group>sysmon_event_1,sysmon_suspicious_proc,</group>
   </rule>
 
+  <!-- Event ID 11: File Create - suspicious extension -->
   <rule id="102103" level="6">
-    <description>Sysmon file creation - suspicious extension</description>
     <if_sid>61605</if_sid>
-    <field>sysmon.event_id:11</field>
-    <match>.*\.scr$|.*\.vbs$|.*\.js$</match>
-    <group>sysmon_event11</group>
+    <field name="win.system.eventID">^11$</field>
+    <field name="win.eventdata.targetFilename" type="pcre2">(?i)\.(scr|vbs|js)$</field>
+    <description>Sysmon - Event 11: suspicious file extension created</description>
+    <group>sysmon_event_11,</group>
   </rule>
 
-  <!-- Rule with if_matched_group relationship -->
-  <rule id="102502" level="10" frequency="3" timeframe="300">
-    <description>Correlation - Multiple suspicious process creation events</description>
-    <if_matched_group>sysmon_event3</if_matched_group>
-    <group>correlation</group>
-  </rule>
-
-  <!-- Rule with if_group relationship -->
-  <rule id="102503" level="9" frequency="5" timeframe="600">
-    <description>Group correlation - Sysmon network connections</description>
-    <if_group>sysmon_event3</if_group>
-    <group>correlation</group>
-  </rule>
-
-  <!-- Additional rules with sysmon_event3 group for testing -->
+  <!-- Event ID 3: Network connection - outbound (initiated by host) -->
   <rule id="102201" level="5">
-    <description>Sysmon network connection - outbound</description>
     <if_sid>61605</if_sid>
-    <field>sysmon.event_id:3</field>
-    <field>sysmon.direction:outbound</field>
-    <group>sysmon_event3</group>
+    <field name="win.system.eventID">^3$</field>
+    <field name="win.eventdata.initiated" type="pcre2">(?i)^true$</field>
+    <description>Sysmon - Event 3: outbound network connection</description>
+    <group>sysmon_event_3,</group>
   </rule>
 
+  <!-- Event ID 3: suspicious destination -->
   <rule id="102202" level="6">
-    <description>Sysmon network connection - suspicious destination</description>
     <if_sid>61605</if_sid>
-    <field>sysmon.event_id:3</field>
-    <match>.*malicious\.com.*|.*suspicious\.net.*</match>
+    <field name="win.system.eventID">^3$</field>
+    <field name="win.eventdata.destinationHostname" type="pcre2">(?i)(^|\.)malicious\.com$|(^|\.)suspicious\.net$</field>
+    <description>Sysmon - Event 3: suspicious destination hostname</description>
     <mitre>
       <id>T1071</id>
     </mitre>
-    <group>sysmon_event3</group>
+    <group>sysmon_event_3,</group>
   </rule>
 
+  <!-- Event ID 3: unusual destination port -->
   <rule id="102203" level="7">
-    <description>Sysmon network connection - unusual port</description>
     <if_sid>61605</if_sid>
-    <field>sysmon.event_id:3</field>
-    <field>sysmon.destination_port:4444|5555|6666</field>
-    <group>sysmon_event3</group>
+    <field name="win.system.eventID">^3$</field>
+    <field name="win.eventdata.destinationPort">^(4444|5555|6666)$</field>
+    <description>Sysmon - Event 3: unusual destination port</description>
+    <group>sysmon_event_3,</group>
   </rule>
-</ruleset>
+
+  <!-- Correlation: multiple suspicious process creation alerts -->
+  <rule id="102502" level="10" frequency="3" timeframe="300">
+    <if_matched_group>sysmon_suspicious_proc</if_matched_group>
+    <description>Correlation - multiple suspicious process creations in 5 minutes</description>
+    <group>correlation,sysmon,</group>
+  </rule>
+
+  <!-- Correlation: multiple Sysmon network connection alerts -->
+  <rule id="102503" level="9" frequency="5" timeframe="600">
+    <if_matched_group>sysmon_event_3</if_matched_group>
+    <description>Correlation - multiple Sysmon network connection events in 10 minutes</description>
+    <group>correlation,sysmon,</group>
+  </rule>
+
+</group>
