@@ -13,7 +13,7 @@ def test_connection_toggles():
     # Simple test XML with multiple connection types
     test_xml = """<?xml version="1.0" encoding="UTF-8"?>
 <group name="test">
-  <rule id="100" level="5" frequency="3">
+  <rule id="100" level="5">
     <description>Base rule for testing</description>
     <group>authentication_failure,</group>
   </rule>
