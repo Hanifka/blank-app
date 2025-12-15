@@ -527,25 +527,25 @@ def main():
         st.divider()
 
         # Show debug log
-        st.subheader("🐛 XML Extraction Debug Log")
-        st.caption("Complete list of all extracted values for verification")
+        # st.subheader("🐛 XML Extraction Debug Log")
+        # st.caption("Complete list of all extracted values for verification")
 
-        if st.session_state.rules:
-            debug_log = generate_debug_log(st.session_state.rules)
+        # if st.session_state.rules:
+        #     debug_log = generate_debug_log(st.session_state.rules)
             
-            col1, col2 = st.columns([3, 1])
-            with col1:
-                st.text_area(
-                    "Debug Log (copyable)",
-                    value=debug_log,
-                    height=400,
-                    disabled=True
-                )
-            with col2:
-                if st.button("📋 Copy All"):
-                    st.write("Click the text area and use Ctrl+C to copy")
+        #     col1, col2 = st.columns([3, 1])
+        #     with col1:
+        #         st.text_area(
+        #             "Debug Log (copyable)",
+        #             value=debug_log,
+        #             height=400,
+        #             disabled=True
+        #         )
+        #     with col2:
+        #         if st.button("📋 Copy All"):
+        #             st.write("Click the text area and use Ctrl+C to copy")
 
-        st.divider()
+        # st.divider()
 
         render_rule_details(filtered_rules, st.session_state.rule_xml_map)
     else:
