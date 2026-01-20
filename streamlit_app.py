@@ -526,7 +526,7 @@ def main():
         render_flowchart_visualization(filtered_rules, connection_toggles, display_options)
         st.divider()
 
-        Show debug log
+        # Show debug log
         st.subheader("🐛 XML Extraction Debug Log")
         st.caption("Complete list of all extracted values for verification")
 
