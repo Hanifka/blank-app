@@ -18,6 +18,7 @@ class DetectionCues:
     """Captures detection-related information from a rule."""
     decoded_as: Optional[str] = None
     if_sid: Optional[int] = None
+    if_sids: List[int] = field(default_factory=list)
     if_matched_sid: List[int] = field(default_factory=list)
     if_matched_groups: List[str] = field(default_factory=list)
     if_groups: List[str] = field(default_factory=list)
@@ -29,6 +30,7 @@ class FilterCondition:
     """Represents a single filter condition in a rule."""
     match: Optional[str] = None
     field: Optional[str] = None
+    field_type: Optional[str] = None
     frequency: Optional[int] = None
     timeframe: Optional[int] = None
     same_field: Optional[str] = None
@@ -140,7 +142,7 @@ def _parse_rule_element(rule_elem: ET.Element) -> Optional[RuleData]:
     groups_elem = rule_elem.find("group")
     groups = []
     if groups_elem is not None and groups_elem.text:
-        groups = [g.strip() for g in groups_elem.text.split(",")]
+        groups = [g.strip() for g in groups_elem.text.split(",") if g.strip()]
 
     rule = RuleData(
         rule_id=rule_id,
@@ -173,13 +175,25 @@ def _parse_detection_cues(rule_elem: ET.Element) -> DetectionCues:
         if program_name is not None and program_name.text:
             decoded_as = program_name.text
 
-    # Look for if_sid (parent rule)
-    if_sid_text = rule_elem.findtext("if_sid")
-    if if_sid_text:
-        try:
-            if_sid = int(if_sid_text.split(",")[0].strip())
-        except ValueError:
-            pass
+    # Look for if_sid (parent rule) - supports repeated tags and comma-separated values
+    if_sids = []
+    for if_sid_elem in rule_elem.findall("if_sid"):
+        if_sid_text = (if_sid_elem.text or "").strip()
+        if not if_sid_text:
+            continue
+        for sid_text in if_sid_text.split(","):
+            sid_text = sid_text.strip()
+            if not sid_text:
+                continue
+            try:
+                sid = int(sid_text)
+            except ValueError:
+                continue
+            if sid not in if_sids:
+                if_sids.append(sid)
+
+    if if_sids:
+        if_sid = if_sids[0]
 
     # Extract if_matched_sid (same as if_sid)
     if_matched_sid_text = rule_elem.findtext("if_matched_sid")
@@ -205,8 +219,8 @@ def _parse_detection_cues(rule_elem: ET.Element) -> DetectionCues:
 
     # Debug logging for extracted relationships
     rule_id = rule_elem.get("id", "unknown")
-    if if_sid:
-        logger.info(f"Rule {rule_id} --if_sid--> {if_sid}")
+    for sid in if_sids:
+        logger.info(f"Rule {rule_id} --if_sid--> {sid}")
     for matched_sid in if_matched_sid:
         logger.info(f"Rule {rule_id} --if_matched_sid--> {matched_sid}")
     for group in if_matched_groups:
@@ -217,6 +231,7 @@ def _parse_detection_cues(rule_elem: ET.Element) -> DetectionCues:
     return DetectionCues(
         decoded_as=decoded_as,
         if_sid=if_sid,
+        if_sids=if_sids,
         if_matched_sid=if_matched_sid,
         if_matched_groups=if_matched_groups,
         if_groups=if_groups,
@@ -228,42 +243,59 @@ def _parse_filter_conditions(rule_elem: ET.Element) -> List[FilterCondition]:
     """Extract filter conditions from a rule element."""
     conditions = []
 
-    # Parse match conditions
-    match_elem = rule_elem.find("match")
-    if match_elem is not None and match_elem.text:
-        condition = FilterCondition(match=match_elem.text)
-        conditions.append(condition)
+    # Parse match conditions (support multiple match tags)
+    for match_elem in rule_elem.findall("match"):
+        if match_elem is not None and match_elem.text:
+            condition = FilterCondition(match=match_elem.text)
+            conditions.append(condition)
 
-    # Parse field conditions
-    field_elem = rule_elem.find("field")
-    if field_elem is not None and field_elem.text:
-        condition = FilterCondition(field=field_elem.text)
+    # Parse field conditions (support multiple field tags and name attributes)
+    for field_elem in rule_elem.findall("field"):
+        if field_elem is None:
+            continue
+
+        field_text = (field_elem.text or "").strip()
+        field_name = field_elem.get("name")
+
+        if field_name and field_text:
+            field_value = f"{field_name}:{field_text}"
+        elif field_name:
+            field_value = field_name
+        elif field_text:
+            field_value = field_text
+        else:
+            continue
+
+        condition = FilterCondition(field=field_value, field_type=field_elem.get("type"))
         conditions.append(condition)
 
     # Parse frequency-based conditions
-    frequency_elem = rule_elem.find("frequency")
-    if frequency_elem is not None and frequency_elem.text:
+    frequency = None
+    frequency_text = rule_elem.findtext("frequency") or rule_elem.get("frequency")
+    if frequency_text:
         try:
-            frequency = int(frequency_elem.text)
-            timeframe_elem = rule_elem.find("timeframe")
-            timeframe = None
-            if timeframe_elem is not None and timeframe_elem.text:
-                try:
-                    timeframe = int(timeframe_elem.text)
-                except ValueError:
-                    pass
-
-            same_field_elem = rule_elem.find("same_field")
-            same_field = same_field_elem.text if same_field_elem is not None else None
-
-            condition = FilterCondition(
-                frequency=frequency,
-                timeframe=timeframe,
-                same_field=same_field,
-            )
-            conditions.append(condition)
+            frequency = int(frequency_text.strip())
         except ValueError:
-            pass
+            frequency = None
+
+    if frequency is not None:
+        timeframe = None
+        timeframe_text = rule_elem.findtext("timeframe") or rule_elem.get("timeframe")
+        if timeframe_text:
+            try:
+                timeframe = int(timeframe_text.strip())
+            except ValueError:
+                timeframe = None
+
+        same_field_elem = rule_elem.find("same_field")
+        same_field = same_field_elem.text if same_field_elem is not None else None
+
+        condition = FilterCondition(
+            frequency=frequency,
+            timeframe=timeframe,
+            same_field=same_field,
+        )
+        conditions.append(condition)
 
     # Parse no_alert
     no_alert_elem = rule_elem.find("no_alert")
@@ -319,9 +351,9 @@ def _extract_mitre_techniques(rule_elem: ET.Element) -> List[str]:
     
     # Format 1: <mitre><id>T1021</id></mitre>
     for mitre_elem in rule_elem.findall("mitre"):
-        id_elem = mitre_elem.find("id")
-        if id_elem is not None and id_elem.text:
-            techniques.append(id_elem.text.strip())
+        for id_elem in mitre_elem.findall("id"):
+            if id_elem is not None and id_elem.text:
+                techniques.append(id_elem.text.strip())
     
     # Format 2: <reference><type>attack</type><technique>T1110.001</technique></reference>
     ref_techniques = _extract_references(rule_elem, "attack", "technique")
@@ -356,7 +388,8 @@ def summarize_filter_logic(conditions: List[FilterCondition]) -> str:
         if cond.match:
             summaries.append(f"Match: {cond.match}")
         if cond.field:
-            summaries.append(f"Field: {cond.field}")
+            field_type_info = f" ({cond.field_type})" if cond.field_type else ""
+            summaries.append(f"Field{field_type_info}: {cond.field}")
         if cond.frequency:
             timeframe_info = f" within {cond.timeframe}s" if cond.timeframe else ""
             field_info = f" on {cond.same_field}" if cond.same_field else ""
@@ -385,12 +418,16 @@ def extract_relationships(rules: List[RuleData]) -> List[Dict[str, Any]]:
     
     for rule in rules:
         # if_sid relationships
-        if rule.detection_cues.if_sid:
+        if_sids = getattr(rule.detection_cues, "if_sids", [])
+        if not if_sids and rule.detection_cues.if_sid is not None:
+            if_sids = [rule.detection_cues.if_sid]
+
+        for sid in if_sids:
             relationships.append({
                 "source_rule_id": rule.rule_id,
-                "target_rule_id": rule.detection_cues.if_sid,
+                "target_rule_id": sid,
                 "relationship_type": "if_sid",
-                "description": f"Rule {rule.rule_id} references parent rule {rule.detection_cues.if_sid}"
+                "description": f"Rule {rule.rule_id} references parent rule {sid}"
             })
         
         # if_matched_sid relationships
@@ -471,7 +508,10 @@ def generate_debug_log(rules: List[RuleData]) -> str:
         lines.append(f"Description: \"{rule.description}\"")
         
         lines.append(f"Groups Extracted: {rule.groups}")
-        lines.append(f"if_sid Extracted: {[rule.detection_cues.if_sid] if rule.detection_cues.if_sid else []}")
+        if_sids = getattr(rule.detection_cues, "if_sids", [])
+        if not if_sids and rule.detection_cues.if_sid is not None:
+            if_sids = [rule.detection_cues.if_sid]
+        lines.append(f"if_sid Extracted: {if_sids}")
         lines.append(
             f"if_matched_sid Extracted: {getattr(rule.detection_cues, 'if_matched_sid', [])}"
         )
@@ -484,9 +524,12 @@ def generate_debug_log(rules: List[RuleData]) -> str:
         lines.append("Relationships:")
         relationships_found = False
         
-        if rule.detection_cues.if_sid is not None:
+        if_sids = getattr(rule.detection_cues, "if_sids", [])
+        if not if_sids and rule.detection_cues.if_sid is not None:
+            if_sids = [rule.detection_cues.if_sid]
+        for sid in if_sids:
             lines.append(
-                f"  - Rule {rule.rule_id} --if_sid--> {rule.detection_cues.if_sid}"
+                f"  - Rule {rule.rule_id} --if_sid--> {sid}"
             )
             relationships_found = True
         

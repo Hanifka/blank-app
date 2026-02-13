@@ -133,6 +133,21 @@ class TestWazuhParserBasic(unittest.TestCase):
         rule = [r for r in rules if r.rule_id == 1002][0]
         self.assertEqual(rule.detection_cues.if_sid, 1001)
 
+    def test_parse_rule_with_multiple_if_sid_values(self):
+        """Test parsing multiple if_sid values from one tag and repeated tags."""
+        xml_content = """<?xml version="1.0" encoding="UTF-8"?>
+<ruleset>
+    <rule id="7301" level="7">
+        <if_sid>1001, 1002</if_sid>
+        <if_sid>1003</if_sid>
+    </rule>
+</ruleset>
+"""
+        rules, _ = parse_wazuh_xml(xml_content)
+        self.assertEqual(len(rules), 1)
+        self.assertEqual(rules[0].detection_cues.if_sids, [1001, 1002, 1003])
+        self.assertEqual(rules[0].detection_cues.if_sid, 1001)
+
     def test_parse_rule_with_matched_group(self):
         """Test parsing if_matched_group conditions."""
         rules, warnings = parse_wazuh_xml(SAMPLE_VALID_XML)
@@ -165,6 +180,48 @@ class TestWazuhParserBasic(unittest.TestCase):
         self.assertEqual(len(rule.filter_conditions), 1)
         self.assertTrue(rule.filter_conditions[0].no_alert)
 
+    def test_parse_frequency_from_rule_attributes(self):
+        """Test parsing frequency/timeframe when provided as rule attributes."""
+        rules, warnings = parse_wazuh_xml(SAMPLE_WITH_IF_MATCHED_SID)
+
+        rule = [r for r in rules if r.rule_id == 100539][0]
+        frequency_condition = [c for c in rule.filter_conditions if c.frequency is not None][0]
+
+        self.assertEqual(frequency_condition.frequency, 8)
+        self.assertEqual(frequency_condition.timeframe, 60)
+
+    def test_parse_multiple_field_conditions(self):
+        """Test parsing multiple field tags and preserving field name attributes."""
+        xml_content = """<?xml version="1.0" encoding="UTF-8"?>
+<ruleset>
+    <rule id="7001" level="10">
+        <description>Rule with multiple field filters</description>
+        <field name="win.eventdata.image">cmd.exe</field>
+        <field name="win.eventdata.parentImage">powershell.exe</field>
+    </rule>
+</ruleset>
+"""
+
+        rules, warnings = parse_wazuh_xml(xml_content)
+
+        self.assertEqual(len(rules), 1)
+        fields = [c.field for c in rules[0].filter_conditions if c.field]
+        self.assertIn("win.eventdata.image:cmd.exe", fields)
+        self.assertIn("win.eventdata.parentImage:powershell.exe", fields)
+
+    def test_parse_field_type_attribute(self):
+        """Test parsing field type (e.g. pcre2) from rule field tags."""
+        xml_content = """<?xml version="1.0" encoding="UTF-8"?>
+<ruleset>
+    <rule id="7002" level="8">
+        <field name="process.title" type="pcre2">(?i)curl\\s+.*</field>
+    </rule>
+</ruleset>
+"""
+        rules, _ = parse_wazuh_xml(xml_content)
+        field_conditions = [c for c in rules[0].filter_conditions if c.field]
+        self.assertEqual(field_conditions[0].field_type, "pcre2")
+
 
 class TestWazuhParserReferences(unittest.TestCase):
     """Test reference extraction (MITRE, CIS, NIST)."""
@@ -178,6 +235,21 @@ class TestWazuhParserReferences(unittest.TestCase):
         self.assertEqual(len(rule.mitre_techniques), 2)
         self.assertIn("T1234.001", rule.mitre_techniques)
         self.assertIn("T5678", rule.mitre_techniques)
+
+    def test_extract_multiple_mitre_ids_from_single_mitre_tag(self):
+        """Test extracting all <mitre><id> entries (not just the first)."""
+        xml_content = """<?xml version="1.0" encoding="UTF-8"?>
+<ruleset>
+    <rule id="7101" level="8">
+        <mitre>
+            <id>T1014</id>
+            <id>T1547.006</id>
+        </mitre>
+    </rule>
+</ruleset>
+"""
+        rules, _ = parse_wazuh_xml(xml_content)
+        self.assertEqual(rules[0].mitre_techniques, ["T1014", "T1547.006"])
 
 
 class TestWazuhParserGroups(unittest.TestCase):
@@ -193,6 +265,18 @@ class TestWazuhParserGroups(unittest.TestCase):
         self.assertIn("web", rule.groups)
         self.assertIn("http", rule.groups)
         self.assertIn("access_control", rule.groups)
+
+    def test_extract_groups_omits_empty_values(self):
+        """Test trailing commas do not create empty group values."""
+        xml_content = """<?xml version="1.0" encoding="UTF-8"?>
+<ruleset>
+    <rule id="7201" level="4">
+        <group>auditbeat,linux,</group>
+    </rule>
+</ruleset>
+"""
+        rules, _ = parse_wazuh_xml(xml_content)
+        self.assertEqual(rules[0].groups, ["auditbeat", "linux"])
 
 
 class TestWazuhParserErrorHandling(unittest.TestCase):
@@ -351,6 +435,27 @@ class TestRelationshipExtraction(unittest.TestCase):
         ]
         self.assertEqual(len(matched_rels), 1)
         self.assertEqual(matched_rels[0]["target_rule_id"], 100537)
+
+    def test_extract_multiple_if_sid_relationships(self):
+        xml_content = """<?xml version="1.0" encoding="UTF-8"?>
+<ruleset>
+    <rule id="7401" level="7"><description>parent 1</description></rule>
+    <rule id="7402" level="7"><description>parent 2</description></rule>
+    <rule id="7403" level="7">
+        <if_sid>7401,7402</if_sid>
+        <description>child</description>
+    </rule>
+</ruleset>
+"""
+        rules, _ = parse_wazuh_xml(xml_content)
+        relationships = extract_relationships(rules)
+        if_sid_rels = [
+            r for r in relationships
+            if r["relationship_type"] == "if_sid" and r["source_rule_id"] == 7403
+        ]
+        self.assertEqual(len(if_sid_rels), 2)
+        targets = sorted(r["target_rule_id"] for r in if_sid_rels)
+        self.assertEqual(targets, [7401, 7402])
 
 
 if __name__ == "__main__":
