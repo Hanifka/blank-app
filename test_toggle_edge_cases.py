@@ -204,15 +204,19 @@ def test_edge_cases():
         show_if_matched_group=True,
         show_if_group=True
     )
-    # Check edge traces have hover text
-    edge_traces = [trace for trace in fig.data if trace.mode == 'lines']
-    if edge_traces:
-        sample_hover = edge_traces[0].hovertext
-        print(f"✓ Sample edge hover text: {sample_hover}")
-        if "Type:" in sample_hover:
-            print("✓ Connection type is included in hover text")
-        else:
-            print("⚠ Connection type not found in hover text")
+    # Edge hover lives on invisible midpoint markers, not on the line traces
+    # themselves - one trace per link type keeps large graphs fast.
+    edge_hovers = [
+        h
+        for trace in fig.data
+        for h in (getattr(trace, "hovertext", None) or [])
+        if "\u2192 Rule" in str(h)
+    ]
+    assert edge_hovers, "No edge hover text found"
+    sample_hover = edge_hovers[0]
+    print(f"✓ Sample edge hover text: {sample_hover}")
+    assert "Type:" in sample_hover, f"Connection type missing from '{sample_hover}'"
+    print("✓ Connection type is included in hover text")
     
     print("\n" + "="*60)
     print("All edge case tests passed! ✓")

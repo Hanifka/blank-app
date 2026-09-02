@@ -5,6 +5,7 @@ Fixed comprehensive test for node display toggle functionality.
 
 from wazuh_parser import parse_wazuh_xml
 from visualizations.flowchart import create_rule_network_visualization
+from _node_lookup import node_hover_for_rule, node_text_for_rule
 
 def test_comprehensive_toggles_fixed():
     """Test all toggle combinations with rules that have filter conditions."""
@@ -62,9 +63,8 @@ def test_comprehensive_toggles_fixed():
         )
         
         if fig.data and len(fig.data) > 0:
-            node_trace = fig.data[-1]
-            if hasattr(node_trace, 'text') and node_trace.text:
-                node_text = node_trace.text[0]  # First node
+            node_text = node_text_for_rule(fig, 100002)
+            if node_text:
                 print(f"   Node text: {node_text[:80]}...")
                 
                 lines = node_text.split("<br>")
@@ -117,20 +117,17 @@ def test_comprehensive_toggles_fixed():
     )
     
     if fig.data and len(fig.data) > 0:
-        node_trace = fig.data[-1]
-        if hasattr(node_trace, 'hovertext') and node_trace.hovertext:
-            hover_text = node_trace.hovertext[0]
-            print("✅ Hover text generated")
-            print(f"📝 Hover text preview: {hover_text[:150]}...")
-            
-            # Verify hover text contains comprehensive info
-            assert "<b>Rule 100002</b>" in hover_text, "Missing Rule ID in hover"
-            assert "Level:" in hover_text, "Missing level in hover"
-            assert "<b>Description:</b>" in hover_text, "Missing description in hover"
-            assert "<b>Filter Conditions:</b>" in hover_text, "Missing filter conditions in hover"
-            print("✅ Hover text contains comprehensive information")
-        else:
-            print("❌ No hover text found")
+        hover_text = node_hover_for_rule(fig, 100002)
+        print("✅ Hover text generated")
+        print(f"📝 Hover text preview: {hover_text[:150]}...")
+
+        # Verify hover text contains comprehensive info
+        assert "<b>Rule 100002</b>" in hover_text, "Missing Rule ID in hover"
+        assert "level " in hover_text, "Missing level in hover"
+        assert "<b>Conditions:</b>" in hover_text, "Missing filter conditions in hover"
+        assert "<b>Triggered by:</b>" in hover_text, "Missing parents in hover"
+        assert "<b>Feeds:</b>" in hover_text, "Missing children in hover"
+        print("✅ Hover text contains comprehensive information")
     
     print("\n🎊 Complete node display toggle functionality verified!")
     

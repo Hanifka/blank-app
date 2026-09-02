@@ -115,7 +115,7 @@ def test_with_connection_types():
                     if cond_toggle:
                         # Should have condition info
                         cond_line = lines[2] if desc_toggle else lines[1]
-                        assert "field: apache" in cond_line, f"Missing condition info in '{cond_line}'"
+                        assert "field: program:apache" in cond_line, f"Missing condition info in '{cond_line}'"
                     
                     print(f"   ✅ Toggle test passed!")
     else:

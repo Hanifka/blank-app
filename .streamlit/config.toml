@@ -1,0 +1,23 @@
+[theme]
+base = "dark"
+primaryColor = "#38bdf8"
+backgroundColor = "#0b1220"
+secondaryBackgroundColor = "#131c2e"
+textColor = "#e2e8f0"
+font = "sans serif"
+
+[server]
+# Rule files are text. 20 MB is far more than any realistic ruleset.
+maxUploadSize = 20
+# Leave CORS at its secure default. Setting enableCORS=false makes Streamlit
+# send 'Access-Control-Allow-Origin: *' and accept a WebSocket from any origin,
+# which XSRF protection does not cover.
+enableXsrfProtection = true
+
+[browser]
+gatherUsageStats = false
+
+[client]
+# Show a short error in the browser, keep the traceback in the server log.
+showErrorDetails = false
+toolbarMode = "minimal"

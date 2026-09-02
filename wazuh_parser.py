@@ -29,6 +29,8 @@ class DetectionCues:
 class FilterCondition:
     """Represents a single filter condition in a rule."""
     match: Optional[str] = None
+    regex: Optional[str] = None
+    regex_type: Optional[str] = None
     field: Optional[str] = None
     field_type: Optional[str] = None
     frequency: Optional[int] = None
@@ -249,6 +251,16 @@ def _parse_filter_conditions(rule_elem: ET.Element) -> List[FilterCondition]:
             condition = FilterCondition(match=match_elem.text)
             conditions.append(condition)
 
+    # Parse regex conditions. Wazuh defaults to OS_Regex; type="pcre2" opts
+    # into the PCRE2 engine, and which one is in use changes what the pattern
+    # means, so keep the type alongside the pattern.
+    for regex_elem in rule_elem.findall("regex"):
+        if regex_elem is not None and regex_elem.text:
+            conditions.append(FilterCondition(
+                regex=regex_elem.text.strip(),
+                regex_type=regex_elem.get("type") or "osregex",
+            ))
+
     # Parse field conditions (support multiple field tags and name attributes)
     for field_elem in rule_elem.findall("field"):
         if field_elem is None:
@@ -387,6 +399,9 @@ def summarize_filter_logic(conditions: List[FilterCondition]) -> str:
     for cond in conditions:
         if cond.match:
             summaries.append(f"Match: {cond.match}")
+        if cond.regex:
+            engine = "PCRE2" if cond.regex_type == "pcre2" else "OS_Regex"
+            summaries.append(f"Regex ({engine}): {cond.regex}")
         if cond.field:
             field_type_info = f" ({cond.field_type})" if cond.field_type else ""
             summaries.append(f"Field{field_type_info}: {cond.field}")
@@ -558,6 +573,9 @@ def generate_debug_log(rules: List[RuleData]) -> str:
                 lines.append(f"  Condition {i}:")
                 if condition.match:
                     lines.append(f"    Match: {condition.match}")
+                if condition.regex:
+                    lines.append(f"    Regex: {condition.regex}")
+                    lines.append(f"    Regex Engine: {condition.regex_type}")
                 if condition.field:
                     lines.append(f"    Field: {condition.field}")
                 if condition.frequency is not None:
