@@ -150,8 +150,9 @@ def render_loader() -> None:
     uploaded = st.sidebar.file_uploader(
         "Wazuh rules XML",
         type=["xml"],
-        help="Any file from /var/ossec/etc/rules/ — local_rules.xml, a "
-             "Sysmon ruleset, anything with <rule> elements.",
+        help="Any file with <rule> elements — local_rules.xml, a Sysmon "
+             "ruleset, anything you copied out of /var/ossec/etc/rules/. "
+             "Upload it here; this app never reads the manager itself.",
     )
     if uploaded is not None:
         if uploaded.size > MAX_UPLOAD_BYTES:
@@ -501,9 +502,12 @@ def render_health_tab(xml_content: str, source_id: str, report: LintReport,
         else:
             st.write("Nothing to show.")
 
-    with st.expander("Deploying this to a Wazuh manager"):
+    with st.expander("Optional: what to do on the manager after this"):
         st.markdown(
             """
+These steps run on your Wazuh manager, by hand, once you are happy with the
+cleaned file. Nothing here is required to use this app.
+
 1. Copy the cleaned file to `/var/ossec/etc/rules/local_rules.xml` on the manager.
 2. Dry-run it before restarting anything:
    ```bash
@@ -677,7 +681,10 @@ def render_about() -> None:
         st.markdown(
             "Loads a Wazuh rules file, checks it for anything that would break "
             "`wazuh-manager`, hands back a cleaned copy, and draws how the "
-            "rules chain together."
+            "rules chain together.\n\n"
+            "**Runs standalone.** You upload the XML; the app never connects to "
+            "a Wazuh manager, reads `/var/ossec`, or needs to sit on the "
+            "manager host. Deploy it on any machine."
         )
     with st.sidebar.expander("📬 Contact / feedback"):
         st.markdown(
